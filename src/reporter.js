@@ -80,6 +80,16 @@ function renderSummary(summary) {
 }
 
 function renderPage(page, index) {
+  // Render per-TikTok-pixel comparison sections
+  const pixelSections = page.pixelComparisons.map((pc) =>
+    renderPixelComparison(pc, page.meta)
+  ).join("\n");
+
+  // Render Meta-only events (not matched by any TikTok pixel)
+  const metaOnlySection = page.metaOnlyEvents && page.metaOnlyEvents.length > 0
+    ? renderMetaOnlySection(page.metaOnlyEvents, page.meta)
+    : "";
+
   return `
   <section class="page-section">
     <h2>Page ${index + 1}: <a href="${esc(page.url)}" target="_blank">${esc(page.url)}</a></h2>
@@ -88,21 +98,70 @@ function renderPage(page, index) {
       <div class="stat-card tiktok small">
         <div class="stat-value">${page.tiktok.eventCount}</div>
         <div class="stat-label">TikTok Events</div>
-        ${page.tiktok.pixelIds.length > 0 ? `<div class="stat-detail">IDs: ${page.tiktok.pixelIds.map((id) => esc(id)).join(", ")}</div>` : ""}
+        <div class="stat-detail">${page.tiktok.pixelIds.length} pixel ID(s)</div>
       </div>
       <div class="stat-card meta small">
         <div class="stat-value">${page.meta.eventCount}</div>
         <div class="stat-label">Meta Events</div>
-        ${page.meta.pixelIds.length > 0 ? `<div class="stat-detail">IDs: ${page.meta.pixelIds.map((id) => esc(id)).join(", ")}</div>` : ""}
+        <div class="stat-detail">${page.meta.pixelIds.length} pixel ID(s)</div>
       </div>
     </div>
 
-    ${renderHealthSummary(page.health)}
-
-    ${renderEventComparisonTable(page.eventComparison, page.paramComparison)}
-    ${renderEventDetails(page)}
+    ${pixelSections}
+    ${metaOnlySection}
     ${renderObservations(page.observations)}
   </section>`;
+}
+
+/**
+ * Render a comparison section for a single TikTok pixel vs Meta.
+ */
+function renderPixelComparison(pc, meta) {
+  const metaIds = meta.pixelIds.length > 0
+    ? meta.pixelIds.map((id) => `<code>${esc(id)}</code>`).join(", ")
+    : "<em>none</em>";
+
+  return `
+    <div class="pixel-comparison-section">
+      <h3>TikTok Pixel <code>${esc(pc.tiktokPixelId)}</code></h3>
+      <p class="pixel-comparison-meta">
+        ${pc.tiktokEventCount} TikTok event(s) compared against Meta pixel(s): ${metaIds}
+      </p>
+      ${renderHealthSummary(pc.health)}
+      ${renderEventComparisonTable(pc.eventComparison, pc.paramComparison)}
+    </div>`;
+}
+
+/**
+ * Render a section for Meta-only events that weren't matched by any TikTok pixel.
+ */
+function renderMetaOnlySection(metaOnlyEvents, meta) {
+  const rows = metaOnlyEvents
+    .map((e) => {
+      const params = e.customData && Object.keys(e.customData).length > 0
+        ? e.customData
+        : {};
+      return `
+      <tr class="meta_only">
+        <td><strong>${esc(e.eventName)}</strong></td>
+        <td>${esc(e.pixelId || "—")}</td>
+        <td><span class="badge ${e.eventCategory}">${esc(e.eventCategory)}</span></td>
+        <td><code class="params">${esc(JSON.stringify(params, null, 0))}</code></td>
+      </tr>`;
+    })
+    .join("\n");
+
+  return `
+    <div class="pixel-comparison-section">
+      <h3>Meta-Only Events</h3>
+      <p class="pixel-comparison-meta">Events firing on Meta but not matched by any TikTok pixel.</p>
+      <div class="table-wrapper">
+      <table class="detail-table">
+        <thead><tr><th>Event</th><th>Pixel ID</th><th>Category</th><th>Parameters</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      </div>
+    </div>`;
 }
 
 function renderHealthSummary(health) {
@@ -285,62 +344,6 @@ function renderInlineParams(pc) {
               </tbody>
             </table>
           </details>`;
-}
-
-function renderEventDetails(page) {
-  let html = "";
-
-  // TikTok events by pixel ID
-  if (Object.keys(page.tiktok.byPixelId).length > 0) {
-    html += `<h3>TikTok Pixel Events by ID</h3>`;
-    for (const [pixelId, events] of Object.entries(page.tiktok.byPixelId)) {
-      html += renderPixelEventGroup("tiktok", pixelId, events);
-    }
-  }
-
-  // Meta events by pixel ID
-  if (Object.keys(page.meta.byPixelId).length > 0) {
-    html += `<h3>Meta Pixel Events by ID</h3>`;
-    for (const [pixelId, events] of Object.entries(page.meta.byPixelId)) {
-      html += renderPixelEventGroup("meta", pixelId, events);
-    }
-  }
-
-  return html;
-}
-
-function renderPixelEventGroup(platform, pixelId, events) {
-  const platformLabel = platform === "tiktok" ? "TikTok" : "Meta";
-  const rows = events
-    .map((e) => {
-      const params =
-        platform === "tiktok"
-          ? e.eventData && Object.keys(e.eventData).length > 0
-            ? e.eventData
-            : {}
-          : e.customData && Object.keys(e.customData).length > 0
-            ? e.customData
-            : {};
-
-      return `
-      <tr>
-        <td><strong>${esc(e.eventName)}</strong></td>
-        <td><span class="badge ${e.eventCategory}">${esc(e.eventCategory)}</span></td>
-        <td><code class="params">${esc(JSON.stringify(params, null, 0))}</code></td>
-      </tr>`;
-    })
-    .join("\n");
-
-  return `
-    <details class="pixel-group">
-      <summary>${platformLabel} Pixel <code>${esc(pixelId)}</code> — ${events.length} event(s)</summary>
-      <div class="table-wrapper">
-      <table class="detail-table">
-        <thead><tr><th>Event</th><th>Category</th><th>Parameters</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-      </div>
-    </details>`;
 }
 
 function renderObservations(observations) {
@@ -663,6 +666,30 @@ function getStyles() {
       box-shadow: 0 2px 4px rgba(0,0,0,0.04);
     }
     .page-section h2 { margin-top: 0; }
+
+    /* Per-pixel comparison sections */
+    .pixel-comparison-section {
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      background: #fafbfc;
+    }
+    .pixel-comparison-section h3 {
+      margin-top: 0;
+      font-size: 1.15rem;
+    }
+    .pixel-comparison-section h3 code {
+      background: #e0f7fa;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    .pixel-comparison-meta {
+      color: #666;
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
 
     footer {
       text-align: center;
