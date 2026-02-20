@@ -1,0 +1,4 @@
+node_modules/
+pixel-report.html
+*.html
+!src/**/*.html

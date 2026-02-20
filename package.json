@@ -1,0 +1,26 @@
+{
+  "name": "pixel-comparator",
+  "version": "1.0.0",
+  "description": "Compare TikTok and Meta/Facebook pixel events on webpages by intercepting network calls",
+  "main": "src/index.js",
+  "bin": {
+    "pixel-comparator": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "compare": "node src/index.js"
+  },
+  "keywords": [
+    "tiktok",
+    "meta",
+    "facebook",
+    "pixel",
+    "analytics",
+    "comparator"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer": "^24.0.0",
+    "yargs": "^17.7.2"
+  }
+}
