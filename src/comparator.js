@@ -211,18 +211,45 @@ function compareParameters(tiktokEvents, metaEvents) {
     const metaEquivalent = EVENT_EQUIVALENCES[eventName] || eventName;
     const fbEvents = metaByEvent[metaEquivalent] || metaByEvent[eventName] || [];
 
-    if (ttEvents.length === 0 || fbEvents.length === 0) continue;
+    // Compare parameters of the first occurrence on each side
+    const ttParams = ttEvents.length > 0
+      ? (ttEvents[0].eventData && Object.keys(ttEvents[0].eventData).length > 0
+          ? ttEvents[0].eventData
+          : ttEvents[0].allParams || {})
+      : {};
+    const fbParams = fbEvents.length > 0
+      ? (fbEvents[0].customData && Object.keys(fbEvents[0].customData).length > 0
+          ? fbEvents[0].customData
+          : fbEvents[0].allParams || {})
+      : {};
 
-    // Compare parameters of the first occurrence
-    const ttParams = ttEvents[0].eventData || ttEvents[0].allParams || {};
-    const fbParams = fbEvents[0].customData || fbEvents[0].allParams || {};
-
-    const paramDiff = diffParameters(ttParams, fbParams, eventName);
-    if (paramDiff.differences.length > 0 || paramDiff.tiktokOnly.length > 0 || paramDiff.metaOnly.length > 0) {
+    // For events present on both platforms, diff their params
+    if (ttEvents.length > 0 && fbEvents.length > 0) {
+      const paramDiff = diffParameters(ttParams, fbParams, eventName);
       comparisons.push({
         eventName,
         metaEquivalent,
         ...paramDiff,
+      });
+    } else if (ttEvents.length > 0) {
+      // TikTok-only event: list all params as tiktokOnly
+      comparisons.push({
+        eventName,
+        metaEquivalent,
+        matches: [],
+        differences: [],
+        tiktokOnly: Object.entries(ttParams).map(([key, value]) => ({ key, value })),
+        metaOnly: [],
+      });
+    } else if (fbEvents.length > 0) {
+      // Meta-only event: list all params as metaOnly
+      comparisons.push({
+        eventName,
+        metaEquivalent,
+        matches: [],
+        differences: [],
+        tiktokOnly: [],
+        metaOnly: Object.entries(fbParams).map(([key, value]) => ({ key, value })),
       });
     }
   }

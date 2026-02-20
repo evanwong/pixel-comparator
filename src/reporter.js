@@ -97,16 +97,24 @@ function renderPage(page, index) {
       </div>
     </div>
 
-    ${renderEventComparisonTable(page.eventComparison)}
-    ${renderParameterComparison(page.paramComparison)}
+    ${renderEventComparisonTable(page.eventComparison, page.paramComparison)}
     ${renderEventDetails(page)}
     ${renderObservations(page.observations)}
   </section>`;
 }
 
-function renderEventComparisonTable(comparison) {
+function renderEventComparisonTable(comparison, paramComparisons) {
   if (comparison.mapped.length === 0) {
     return `<p class="no-data">No events to compare.</p>`;
+  }
+
+  // Index param comparisons by event name for fast lookup
+  const paramsByEvent = {};
+  for (const pc of paramComparisons) {
+    paramsByEvent[pc.eventName] = pc;
+    if (pc.metaEquivalent && pc.metaEquivalent !== pc.eventName) {
+      paramsByEvent[pc.metaEquivalent] = pc;
+    }
   }
 
   const rows = comparison.mapped
@@ -119,8 +127,9 @@ function renderEventComparisonTable(comparison) {
         meta_only: "Meta Only",
       }[m.status];
 
-      return `
-      <tr class="${statusClass}">
+      // Build the event row
+      let html = `
+      <tr class="event-row ${statusClass}">
         <td>${esc(m.tiktokEvent || "—")}</td>
         <td>${m.tiktokCount}</td>
         <td>${esc(m.metaEvent || "—")}</td>
@@ -128,11 +137,25 @@ function renderEventComparisonTable(comparison) {
         <td><span class="badge ${statusClass}">${statusLabel}</span></td>
         <td>${esc(m.note)}</td>
       </tr>`;
+
+      // Find param comparison for this event
+      const pc = paramsByEvent[m.tiktokEvent] || paramsByEvent[m.metaEvent];
+      if (pc) {
+        const paramHtml = renderInlineParams(pc);
+        if (paramHtml) {
+          html += `
+      <tr class="param-subrow">
+        <td colspan="6">${paramHtml}</td>
+      </tr>`;
+        }
+      }
+
+      return html;
     })
     .join("\n");
 
   return `
-    <h3>Event Comparison</h3>
+    <h3>Event &amp; Parameter Comparison</h3>
     <div class="table-wrapper">
     <table class="comparison-table">
       <thead>
@@ -152,68 +175,90 @@ function renderEventComparisonTable(comparison) {
     </div>`;
 }
 
-function renderParameterComparison(paramComparisons) {
-  if (paramComparisons.length === 0) return "";
+/**
+ * Render parameter comparison as an expandable details block for inline use
+ * inside the event comparison table.
+ */
+function renderInlineParams(pc) {
+  const totalParams = pc.matches.length + pc.differences.length + pc.tiktokOnly.length + pc.metaOnly.length;
+  if (totalParams === 0) return null;
 
-  const sections = paramComparisons
-    .map((pc) => {
-      let html = `<h4>Parameters for "${esc(pc.eventName)}"`;
-      if (pc.metaEquivalent && pc.metaEquivalent !== pc.eventName) {
-        html += ` (Meta: "${esc(pc.metaEquivalent)}")`;
-      }
-      html += `</h4>`;
+  // Build summary label
+  const parts = [];
+  if (pc.matches.length > 0) parts.push(`${pc.matches.length} matched`);
+  if (pc.differences.length > 0) parts.push(`${pc.differences.length} different`);
+  if (pc.tiktokOnly.length > 0) parts.push(`${pc.tiktokOnly.length} TikTok-only`);
+  if (pc.metaOnly.length > 0) parts.push(`${pc.metaOnly.length} Meta-only`);
+  const summaryText = `${totalParams} parameter(s) — ${parts.join(", ")}`;
 
-      // Value differences
-      if (pc.differences.length > 0) {
-        html += `
-        <div class="table-wrapper">
-        <table class="param-table">
-          <thead>
-            <tr><th>TikTok Param</th><th>TikTok Value</th><th>Meta Param</th><th>Meta Value</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            ${pc.differences
-              .map(
-                (d) => `
+  // Build param rows
+  let paramRows = "";
+
+  // Differences first (most important)
+  for (const d of pc.differences) {
+    paramRows += `
             <tr class="diff">
               <td><code>${esc(d.tiktokKey)}</code></td>
-              <td>${esc(String(d.tiktokValue))}</td>
+              <td class="val">${esc(String(d.tiktokValue))}</td>
               <td><code>${esc(d.metaKey)}</code></td>
-              <td>${esc(String(d.metaValue))}</td>
+              <td class="val">${esc(String(d.metaValue))}</td>
               <td><span class="badge count_mismatch">Different</span></td>
-            </tr>`
-              )
-              .join("\n")}
-            ${pc.matches
-              .map(
-                (m) => `
+            </tr>`;
+  }
+
+  // TikTok-only params
+  for (const p of pc.tiktokOnly) {
+    paramRows += `
+            <tr class="tiktok_only">
+              <td><code>${esc(p.key)}</code></td>
+              <td class="val">${esc(String(p.value))}</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td><span class="badge tiktok_only">TikTok Only</span></td>
+            </tr>`;
+  }
+
+  // Meta-only params
+  for (const p of pc.metaOnly) {
+    paramRows += `
+            <tr class="meta_only">
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td><code>${esc(p.key)}</code></td>
+              <td class="val">${esc(String(p.value))}</td>
+              <td><span class="badge meta_only">Meta Only</span></td>
+            </tr>`;
+  }
+
+  // Matched params last
+  for (const m of pc.matches) {
+    paramRows += `
             <tr class="match">
               <td><code>${esc(m.tiktokKey)}</code></td>
-              <td>${esc(String(m.value))}</td>
+              <td class="val">${esc(String(m.value))}</td>
               <td><code>${esc(m.metaKey)}</code></td>
-              <td>${esc(String(m.value))}</td>
+              <td class="val">${esc(String(m.value))}</td>
               <td><span class="badge matched">Same</span></td>
-            </tr>`
-              )
-              .join("\n")}
-          </tbody>
-        </table>
-        </div>`;
-      }
+            </tr>`;
+  }
 
-      // Platform-only params
-      if (pc.tiktokOnly.length > 0) {
-        html += `<p class="param-note"><span class="badge tiktok_only">TikTok Only</span> ${pc.tiktokOnly.map((p) => `<code>${esc(p.key)}</code>=${esc(String(p.value))}`).join(", ")}</p>`;
-      }
-      if (pc.metaOnly.length > 0) {
-        html += `<p class="param-note"><span class="badge meta_only">Meta Only</span> ${pc.metaOnly.map((p) => `<code>${esc(p.key)}</code>=${esc(String(p.value))}`).join(", ")}</p>`;
-      }
-
-      return html;
-    })
-    .join("\n");
-
-  return `<h3>Parameter Comparison</h3>${sections}`;
+  return `
+          <details class="param-details">
+            <summary>${summaryText}</summary>
+            <table class="param-table">
+              <thead>
+                <tr>
+                  <th>TikTok Param</th>
+                  <th>TikTok Value</th>
+                  <th>Meta Param</th>
+                  <th>Meta Value</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>${paramRows}
+              </tbody>
+            </table>
+          </details>`;
 }
 
 function renderEventDetails(page) {
@@ -431,21 +476,65 @@ function getStyles() {
     .badge.conversion { background: #fef9c3; color: #854d0e; }
     .badge.custom { background: #f3f4f6; color: #374151; }
 
-    /* Params */
+    /* Param sub-rows inside event table */
+    tr.param-subrow > td {
+      padding: 0;
+      background: #fafbfc;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    .param-details {
+      margin: 0;
+      border: none;
+    }
+    .param-details summary {
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: #555;
+      user-select: none;
+      list-style: none;
+    }
+    .param-details summary::before {
+      content: "\\25B6\\FE0E ";
+      font-size: 0.7rem;
+      display: inline-block;
+      margin-right: 0.4rem;
+      transition: transform 0.15s;
+    }
+    .param-details[open] summary::before {
+      transform: rotate(90deg);
+    }
+    .param-details summary:hover {
+      background: #f0f1f3;
+    }
+    .param-details .param-table {
+      border-radius: 0;
+      box-shadow: none;
+      font-size: 0.82rem;
+      margin: 0;
+    }
+    .param-details .param-table th {
+      background: #f0f1f3;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.78rem;
+    }
+    .param-details .param-table td {
+      padding: 0.35rem 0.75rem;
+    }
+    .param-details .param-table td.val {
+      max-width: 220px;
+      word-break: break-all;
+    }
+    .param-details .param-table td.empty {
+      color: #bbb;
+    }
+
+    /* Params in detail section */
     code.params {
       font-size: 0.8rem;
       word-break: break-all;
       display: block;
       max-width: 400px;
-    }
-    .param-note {
-      margin: 0.5rem 0;
-      font-size: 0.9rem;
-    }
-    .param-note code {
-      background: #f0f0f0;
-      padding: 0.1rem 0.3rem;
-      border-radius: 3px;
     }
 
     /* Observations */
