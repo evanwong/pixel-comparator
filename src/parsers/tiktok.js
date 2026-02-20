@@ -50,9 +50,9 @@ function parseTikTokRequests(requests) {
   for (const req of requests) {
     const parsed = parseSingleRequest(req);
     if (parsed) {
-      // Skip events with unknown event names (unrecognizable requests)
+      // Skip events with unknown pixel IDs (unrecognizable requests)
       for (const event of parsed) {
-        if (event.eventName !== "unknown") {
+        if (event.pixelId) {
           events.push(event);
         }
       }
@@ -113,7 +113,6 @@ function buildEvent(params, req) {
     params.sdkid ||
     params.pixel_code ||
     params.pixelCode ||
-    params.sdkVersion ||
     req.queryParams?.sdkid ||
     req.queryParams?.pixel_code ||
     null;
