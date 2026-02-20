@@ -91,10 +91,20 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
     await page.authenticate(proxyCredentials);
   }
 
-  // Set a realistic user agent to avoid bot detection
-  await page.setUserAgent(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-  );
+  // Some CDNs (e.g. Akamai) do JA3 TLS fingerprint matching: they block requests
+  // where the User-Agent says Chrome but the TLS fingerprint matches a non-browser
+  // client (which happens when an intercepting proxy re-encrypts traffic).
+  // Workaround: send a non-browser UA at the HTTP level so the TLS fingerprint
+  // matches, then override navigator.userAgent in JS so tracking scripts see Chrome.
+  const CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  const httpUA = proxyCredentials ? "curl/8.5.0" : CHROME_UA;
+  await page.setUserAgent(httpUA);
+  if (proxyCredentials) {
+    await page.evaluateOnNewDocument((ua) => {
+      Object.defineProperty(navigator, "userAgent", { get: () => ua });
+      Object.defineProperty(navigator, "appVersion", { get: () => ua.replace("Mozilla/", "") });
+    }, CHROME_UA);
+  }
 
   const tiktokRequests = [];
   const metaRequests = [];
@@ -120,6 +130,16 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
       waitUntil: "networkidle2",
       timeout,
     });
+
+    // Dismiss cookie consent banners so consent-gated pixels can fire
+    for (const sel of [
+      "#onetrust-accept-btn-handler",
+      ".onetrust-close-btn-handler",
+      ".ot-sdk-btn-handler",
+      "[aria-label='Close']",
+    ]) {
+      try { await page.click(sel); break; } catch {}
+    }
 
     // Wait extra time for late-firing pixels (deferred events, etc.)
     await new Promise((resolve) => setTimeout(resolve, waitAfterLoad));
