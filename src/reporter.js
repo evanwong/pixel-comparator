@@ -268,13 +268,17 @@ function renderInlineParams(pc) {
   const totalParams = pc.matches.length + pc.differences.length + pc.tiktokOnly.length + pc.metaOnly.length;
   if (totalParams === 0) return null;
 
+  // Compute match percentage
+  const matchPct = Math.round((pc.matches.length / totalParams) * 100);
+  const pctClass = matchPct >= 80 ? "pct-good" : matchPct >= 50 ? "pct-fair" : "pct-poor";
+
   // Build summary label
   const parts = [];
   if (pc.matches.length > 0) parts.push(`${pc.matches.length} matched`);
   if (pc.differences.length > 0) parts.push(`${pc.differences.length} different`);
   if (pc.tiktokOnly.length > 0) parts.push(`${pc.tiktokOnly.length} TikTok-only`);
   if (pc.metaOnly.length > 0) parts.push(`${pc.metaOnly.length} Meta-only`);
-  const summaryText = `${totalParams} parameter(s) — ${parts.join(", ")}`;
+  const summaryText = `<span class="param-pct ${pctClass}">${matchPct}%</span> param match — ${totalParams} parameter(s): ${parts.join(", ")}`;
 
   // Build param rows
   let paramRows = "";
@@ -605,6 +609,17 @@ function getStyles() {
     .param-details .param-table td.empty {
       color: #bbb;
     }
+    .param-pct {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.78rem;
+      margin-right: 0.35rem;
+    }
+    .pct-good { background: #dcfce7; color: #166534; }
+    .pct-fair { background: #fef3c7; color: #92400e; }
+    .pct-poor { background: #fee2e2; color: #991b1b; }
 
     /* Params in detail section */
     code.params {
