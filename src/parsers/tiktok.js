@@ -17,6 +17,7 @@
 // Standard TikTok pixel events for reference
 const TIKTOK_STANDARD_EVENTS = [
   "pageview",
+  "LandingPageView",
   "ViewContent",
   "ClickButton",
   "Search",
@@ -48,28 +49,10 @@ function parseTikTokRequests(requests) {
   const events = [];
 
   for (const req of requests) {
-    // Debug: log raw request data to help diagnose parsing issues
-    if (process.env.PIXEL_DEBUG) {
-      console.log("[DEBUG TikTok raw request]", JSON.stringify({
-        fullUrl: req.fullUrl,
-        endpoint: req.endpoint,
-        method: req.method,
-        queryParams: req.queryParams,
-        postParams: req.postParams,
-      }, null, 2));
-    }
-
     const parsed = parseSingleRequest(req);
     if (parsed) {
       // Skip events with unknown pixel IDs or unknown event names
       for (const event of parsed) {
-        if (process.env.PIXEL_DEBUG) {
-          console.log("[DEBUG TikTok parsed]", JSON.stringify({
-            pixelId: event.pixelId,
-            eventName: event.eventName,
-            eventData: event.eventData,
-          }));
-        }
         if (event.pixelId && event.eventName !== "unknown") {
           events.push(event);
         }
@@ -127,10 +110,12 @@ function parseSingleRequest(req) {
  */
 function buildEvent(params, req) {
   // Pixel ID can appear under multiple keys
+  // v2 pixel sends it nested at context.pixel.code
   const pixelId =
     params.sdkid ||
     params.pixel_code ||
     params.pixelCode ||
+    params.context?.pixel?.code ||
     req.queryParams?.sdkid ||
     req.queryParams?.pixel_code ||
     null;
@@ -178,7 +163,7 @@ function buildEvent(params, req) {
     eventName: normalizeEventName(eventName),
     eventCategory: categorizeEvent(eventName),
     eventData,
-    pageUrl: params.url || params.page_url || params.dl || null,
+    pageUrl: params.url || params.page_url || params.dl || params.context?.page?.url || null,
     timestamp: params.tt || params.timestamp || req.wallTime || null,
     rawEndpoint: req.endpoint,
     rawUrl: req.fullUrl,
@@ -243,7 +228,7 @@ function normalizeEventName(name) {
 function categorizeEvent(name) {
   const normalized = normalizeEventName(name);
   const categories = {
-    pageview: ["PageView"],
+    pageview: ["PageView", "LandingPageView"],
     ecommerce: [
       "ViewContent",
       "AddToCart",
