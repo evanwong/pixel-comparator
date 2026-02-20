@@ -48,10 +48,28 @@ function parseTikTokRequests(requests) {
   const events = [];
 
   for (const req of requests) {
+    // Debug: log raw request data to help diagnose parsing issues
+    if (process.env.PIXEL_DEBUG) {
+      console.log("[DEBUG TikTok raw request]", JSON.stringify({
+        fullUrl: req.fullUrl,
+        endpoint: req.endpoint,
+        method: req.method,
+        queryParams: req.queryParams,
+        postParams: req.postParams,
+      }, null, 2));
+    }
+
     const parsed = parseSingleRequest(req);
     if (parsed) {
       // Skip events with unknown pixel IDs or unknown event names
       for (const event of parsed) {
+        if (process.env.PIXEL_DEBUG) {
+          console.log("[DEBUG TikTok parsed]", JSON.stringify({
+            pixelId: event.pixelId,
+            eventName: event.eventName,
+            eventData: event.eventData,
+          }));
+        }
         if (event.pixelId && event.eventName !== "unknown") {
           events.push(event);
         }
