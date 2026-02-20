@@ -26,14 +26,38 @@ async function interceptPixels(urls, options = {}) {
     executablePath,
   } = options;
 
+  // Parse proxy from environment for Chromium
+  let proxyCredentials = null;
+  const proxyEnv = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy;
+  let proxyServer = null;
+  if (proxyEnv) {
+    try {
+      const proxyUrl = new URL(proxyEnv);
+      proxyServer = `${proxyUrl.hostname}:${proxyUrl.port}`;
+      if (proxyUrl.username) {
+        proxyCredentials = {
+          username: decodeURIComponent(proxyUrl.username),
+          password: decodeURIComponent(proxyUrl.password),
+        };
+      }
+    } catch {}
+  }
+
+  const launchArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-blink-features=AutomationControlled",
+    "--ignore-certificate-errors",
+  ];
+  if (proxyServer) {
+    launchArgs.push(`--proxy-server=${proxyServer}`);
+  }
+
   const launchOptions = {
-    headless: "shell",
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
+    headless: true,
+    args: launchArgs,
   };
 
   if (executablePath) {
@@ -46,7 +70,7 @@ async function interceptPixels(urls, options = {}) {
   try {
     for (const url of urls) {
       console.log(`\nScanning: ${url}`);
-      const pageResult = await scanPage(browser, url, { timeout, waitAfterLoad });
+      const pageResult = await scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials });
       results.push(pageResult);
     }
   } finally {
@@ -59,8 +83,13 @@ async function interceptPixels(urls, options = {}) {
 /**
  * Scan a single page and capture pixel requests.
  */
-async function scanPage(browser, url, { timeout, waitAfterLoad }) {
+async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials }) {
   const page = await browser.newPage();
+
+  // Authenticate with proxy if credentials are available
+  if (proxyCredentials) {
+    await page.authenticate(proxyCredentials);
+  }
 
   // Set a realistic user agent to avoid bot detection
   await page.setUserAgent(
