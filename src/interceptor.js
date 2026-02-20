@@ -2,10 +2,10 @@ const puppeteer = require("puppeteer");
 
 /**
  * Patterns for matching pixel network requests.
- * TikTok pixel fires to analytics.tiktok.com
+ * TikTok pixel fires to analytics.tiktok.com/api/v2/pixel
  * Meta/Facebook pixel fires to facebook.com/tr
  */
-const TIKTOK_PATTERN = /analytics\.tiktok\.com/i;
+const TIKTOK_PATTERN = /analytics\.tiktok\.com\/api\/v2\/pixel/i;
 const META_PATTERN = /facebook\.com\/tr/i;
 
 /**
