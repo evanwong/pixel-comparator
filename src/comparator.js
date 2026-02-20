@@ -96,6 +96,8 @@ function comparePage(url, tiktok, meta) {
   const paramComparison = compareParameters(tiktok.events, meta.events);
   const observations = generatePageObservations(url, tiktok, meta, eventComparison, paramComparison);
 
+  const health = computePageHealth(eventComparison, paramComparison, tiktok, meta);
+
   return {
     url,
     tiktok: {
@@ -112,6 +114,7 @@ function comparePage(url, tiktok, meta) {
     },
     eventComparison,
     paramComparison,
+    health,
     observations,
   };
 }
@@ -314,6 +317,120 @@ function getMatchStatus(tiktokCount, metaCount) {
   }
   if (tiktokCount > 0) return "tiktok_only";
   return "meta_only";
+}
+
+/**
+ * Compute a health score (0–100) for how well TikTok and Meta pixels
+ * are aligned on a single page.
+ *
+ * Scoring breakdown:
+ *   - Pixel presence (20 pts): both platforms have at least one pixel
+ *   - Event coverage (40 pts): what % of distinct event types fire on both
+ *   - Event count parity (15 pts): matched events fire the same number of times
+ *   - Parameter alignment (25 pts): matched events send matching params
+ */
+function computePageHealth(eventComparison, paramComparison, tiktok, meta) {
+  const totalEvents = eventComparison.mapped.length;
+
+  // --- Pixel presence (20 pts) ---
+  let presenceScore = 0;
+  if (tiktok.events.length > 0) presenceScore += 10;
+  if (meta.events.length > 0) presenceScore += 10;
+
+  // --- Event coverage (40 pts) ---
+  let coverageScore = 0;
+  if (totalEvents > 0) {
+    const matchedOrMismatch = eventComparison.matched.length + eventComparison.countMismatch.length;
+    coverageScore = Math.round((matchedOrMismatch / totalEvents) * 40);
+  } else if (tiktok.events.length === 0 && meta.events.length === 0) {
+    // No pixels at all — no penalty beyond presence
+    coverageScore = 0;
+  }
+
+  // --- Event count parity (15 pts) ---
+  let parityScore = 0;
+  const eventsOnBoth = eventComparison.matched.length + eventComparison.countMismatch.length;
+  if (eventsOnBoth > 0) {
+    parityScore = Math.round((eventComparison.matched.length / eventsOnBoth) * 15);
+  } else if (totalEvents === 0) {
+    parityScore = 0;
+  }
+
+  // --- Parameter alignment (25 pts) ---
+  let paramScore = 0;
+  const bothSideParams = paramComparison.filter(
+    (pc) => pc.matches.length + pc.differences.length > 0
+  );
+  if (bothSideParams.length > 0) {
+    let totalCompared = 0;
+    let totalMatched = 0;
+    for (const pc of bothSideParams) {
+      const compared = pc.matches.length + pc.differences.length;
+      totalCompared += compared;
+      totalMatched += pc.matches.length;
+    }
+    paramScore = totalCompared > 0 ? Math.round((totalMatched / totalCompared) * 25) : 25;
+  } else if (eventsOnBoth > 0) {
+    // Events on both sides but no comparable params — that's fine
+    paramScore = 25;
+  }
+
+  const score = presenceScore + coverageScore + parityScore + paramScore;
+
+  // Determine rating and explanation
+  let rating, label, explanation;
+  if (score >= 90) {
+    rating = "excellent";
+    label = "Excellent";
+    explanation = "TikTok and Meta pixels are very well aligned. Events and parameters are firing consistently across both platforms.";
+  } else if (score >= 70) {
+    rating = "good";
+    label = "Good";
+    explanation = "Pixels are mostly aligned with minor differences. Review the gaps below to ensure no critical events are missing.";
+  } else if (score >= 45) {
+    rating = "fair";
+    label = "Fair";
+    explanation = "There are notable differences between TikTok and Meta pixel implementations. Several events or parameters are mismatched or missing on one platform.";
+  } else if (score > 0) {
+    rating = "poor";
+    label = "Poor";
+    explanation = "Significant mismatch between TikTok and Meta pixels. Many events are missing on one platform or firing with different parameters.";
+  } else {
+    rating = "none";
+    label = "No Data";
+    explanation = "No pixel events were detected on this page. Verify that the pixels are installed correctly.";
+  }
+
+  // Build specific issue list
+  const issues = [];
+  if (tiktok.events.length === 0 && meta.events.length > 0) {
+    issues.push("TikTok pixel is not firing on this page.");
+  }
+  if (meta.events.length === 0 && tiktok.events.length > 0) {
+    issues.push("Meta pixel is not firing on this page.");
+  }
+  if (eventComparison.tiktokOnly.length > 0) {
+    issues.push(`${eventComparison.tiktokOnly.length} event(s) fire on TikTok only: ${eventComparison.tiktokOnly.map((e) => e.tiktokEvent).join(", ")}`);
+  }
+  if (eventComparison.metaOnly.length > 0) {
+    issues.push(`${eventComparison.metaOnly.length} event(s) fire on Meta only: ${eventComparison.metaOnly.map((e) => e.metaEvent).join(", ")}`);
+  }
+  if (eventComparison.countMismatch.length > 0) {
+    issues.push(`${eventComparison.countMismatch.length} event(s) fire a different number of times across platforms.`);
+  }
+  const paramDiffs = paramComparison.filter((pc) => pc.differences.length > 0);
+  if (paramDiffs.length > 0) {
+    issues.push(`${paramDiffs.length} event(s) have parameter value differences.`);
+  }
+
+  return {
+    score,
+    rating,
+    label,
+    explanation,
+    issues,
+    breakdown: { presenceScore, coverageScore, parityScore, paramScore },
+  };
 }
 
 /**

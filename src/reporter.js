@@ -97,10 +97,36 @@ function renderPage(page, index) {
       </div>
     </div>
 
+    ${renderHealthSummary(page.health)}
+
     ${renderEventComparisonTable(page.eventComparison, page.paramComparison)}
     ${renderEventDetails(page)}
     ${renderObservations(page.observations)}
   </section>`;
+}
+
+function renderHealthSummary(health) {
+  if (!health) return "";
+
+  const issueItems = health.issues
+    .map((issue) => `<li>${esc(issue)}</li>`)
+    .join("\n");
+
+  return `
+    <div class="health-card ${health.rating}">
+      <div class="health-score-ring">
+        <svg viewBox="0 0 36 36" class="health-circle">
+          <path class="health-circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+          <path class="health-circle-fg" stroke-dasharray="${health.score}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+          <text x="18" y="20.5" class="health-score-text">${health.score}</text>
+        </svg>
+      </div>
+      <div class="health-body">
+        <div class="health-label"><span class="badge health-${health.rating}">${esc(health.label)}</span> Pixel Alignment</div>
+        <p class="health-explanation">${esc(health.explanation)}</p>
+        ${health.issues.length > 0 ? `<ul class="health-issues">${issueItems}</ul>` : ""}
+      </div>
+    </div>`;
 }
 
 function renderEventComparisonTable(comparison, paramComparisons) {
@@ -414,6 +440,54 @@ function getStyles() {
     .stat-card.meta .stat-value { color: #1877f2; }
     .stat-label { color: #666; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
     .stat-detail { color: #999; font-size: 0.8rem; margin-top: 0.25rem; }
+
+    /* Health card */
+    .health-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 1.25rem;
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      margin: 1rem 0;
+    }
+    .health-card.excellent { border-left: 4px solid #16a34a; background: #f0fdf4; }
+    .health-card.good { border-left: 4px solid #65a30d; background: #f7fee7; }
+    .health-card.fair { border-left: 4px solid #d97706; background: #fffbeb; }
+    .health-card.poor { border-left: 4px solid #dc2626; background: #fef2f2; }
+    .health-card.none { border-left: 4px solid #9ca3af; background: #f9fafb; }
+    .health-score-ring { flex-shrink: 0; width: 64px; height: 64px; }
+    .health-circle { display: block; }
+    .health-circle-bg {
+      fill: none; stroke: #e5e7eb; stroke-width: 3;
+    }
+    .health-circle-fg {
+      fill: none; stroke-width: 3; stroke-linecap: round;
+      transition: stroke-dasharray 0.4s;
+    }
+    .health-card.excellent .health-circle-fg { stroke: #16a34a; }
+    .health-card.good .health-circle-fg { stroke: #65a30d; }
+    .health-card.fair .health-circle-fg { stroke: #d97706; }
+    .health-card.poor .health-circle-fg { stroke: #dc2626; }
+    .health-card.none .health-circle-fg { stroke: #9ca3af; }
+    .health-score-text {
+      fill: #1a1a2e; font-size: 0.55rem; font-weight: 700;
+      text-anchor: middle; dominant-baseline: middle;
+    }
+    .health-body { flex: 1; }
+    .health-label { font-weight: 600; font-size: 1rem; margin-bottom: 0.35rem; }
+    .badge.health-excellent { background: #dcfce7; color: #166534; }
+    .badge.health-good { background: #ecfccb; color: #365314; }
+    .badge.health-fair { background: #fef3c7; color: #92400e; }
+    .badge.health-poor { background: #fee2e2; color: #991b1b; }
+    .badge.health-none { background: #f3f4f6; color: #374151; }
+    .health-explanation { color: #555; font-size: 0.9rem; margin-bottom: 0.5rem; }
+    .health-issues {
+      margin: 0; padding-left: 1.25rem;
+      font-size: 0.85rem; color: #666;
+      list-style: disc;
+    }
+    .health-issues li { padding: 0.15rem 0; }
 
     /* Pixel IDs */
     .pixel-ids { margin: 0.5rem 0; }
