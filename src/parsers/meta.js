@@ -19,6 +19,9 @@
  *   - it: initialization timestamp
  */
 
+// Events to silently skip — internal/noise events not useful for comparison
+const HIDDEN_EVENTS = new Set(["LandingPageView", "EngagedSession"]);
+
 // Standard Meta pixel events
 const META_STANDARD_EVENTS = [
   "PageView",
@@ -54,7 +57,10 @@ function parseMetaRequests(requests) {
   for (const req of requests) {
     const parsed = parseSingleRequest(req);
     if (parsed) {
-      events.push(...parsed);
+      for (const event of parsed) {
+        if (HIDDEN_EVENTS.has(event.eventName)) continue;
+        events.push(event);
+      }
     }
   }
 

@@ -14,10 +14,12 @@
  *   - url / page_url: page where event fired
  */
 
+// Events to silently skip — internal/noise events not useful for comparison
+const HIDDEN_EVENTS = new Set(["LandingPageView", "EngagedSession"]);
+
 // Standard TikTok pixel events for reference
 const TIKTOK_STANDARD_EVENTS = [
   "pageview",
-  "LandingPageView",
   "ViewContent",
   "ClickButton",
   "Search",
@@ -51,11 +53,10 @@ function parseTikTokRequests(requests) {
   for (const req of requests) {
     const parsed = parseSingleRequest(req);
     if (parsed) {
-      // Skip events with unknown pixel IDs or unknown event names
       for (const event of parsed) {
-        if (event.pixelId && event.eventName !== "unknown") {
-          events.push(event);
-        }
+        if (!event.pixelId || event.eventName === "unknown") continue;
+        if (HIDDEN_EVENTS.has(event.eventName)) continue;
+        events.push(event);
       }
     }
   }
@@ -228,7 +229,7 @@ function normalizeEventName(name) {
 function categorizeEvent(name) {
   const normalized = normalizeEventName(name);
   const categories = {
-    pageview: ["PageView", "LandingPageView"],
+    pageview: ["PageView"],
     ecommerce: [
       "ViewContent",
       "AddToCart",
