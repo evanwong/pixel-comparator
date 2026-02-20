@@ -50,7 +50,12 @@ function parseTikTokRequests(requests) {
   for (const req of requests) {
     const parsed = parseSingleRequest(req);
     if (parsed) {
-      events.push(...parsed);
+      // Skip events with unknown event names (unrecognizable requests)
+      for (const event of parsed) {
+        if (event.eventName !== "unknown") {
+          events.push(event);
+        }
+      }
     }
   }
 
