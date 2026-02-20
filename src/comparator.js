@@ -214,16 +214,14 @@ function compareParameters(tiktokEvents, metaEvents) {
     const metaEquivalent = EVENT_EQUIVALENCES[eventName] || eventName;
     const fbEvents = metaByEvent[metaEquivalent] || metaByEvent[eventName] || [];
 
-    // Compare parameters of the first occurrence on each side
+    // Compare parameters of the first occurrence on each side.
+    // TikTok: only use eventData (from "properties") — allParams is transport noise.
+    // Meta: only use customData (from "cd[...]") — allParams is transport noise.
     const ttParams = ttEvents.length > 0
-      ? (ttEvents[0].eventData && Object.keys(ttEvents[0].eventData).length > 0
-          ? ttEvents[0].eventData
-          : ttEvents[0].allParams || {})
+      ? (ttEvents[0].eventData || {})
       : {};
     const fbParams = fbEvents.length > 0
-      ? (fbEvents[0].customData && Object.keys(fbEvents[0].customData).length > 0
-          ? fbEvents[0].customData
-          : fbEvents[0].allParams || {})
+      ? (fbEvents[0].customData || {})
       : {};
 
     // For events present on both platforms, diff their params

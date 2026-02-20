@@ -126,23 +126,34 @@ function buildEvent(params, req) {
     detectEventFromEndpoint(req.endpoint) ||
     "unknown";
 
-  // Event data / custom parameters
+  // Event data / custom parameters — TikTok sends these under "properties"
   let eventData = {};
-  const edRaw = params.ed || params.event_data || params.properties;
-  if (edRaw) {
-    if (typeof edRaw === "string") {
+  const propsRaw = params.properties;
+  if (propsRaw) {
+    if (typeof propsRaw === "string") {
       try {
-        eventData = JSON.parse(edRaw);
+        eventData = JSON.parse(propsRaw);
       } catch {
-        eventData = { _raw: edRaw };
+        eventData = { _raw: propsRaw };
       }
     } else {
-      eventData = edRaw;
+      eventData = propsRaw;
+    }
+  } else {
+    // Fall back to ed / event_data for older pixel versions
+    const edRaw = params.ed || params.event_data;
+    if (edRaw) {
+      if (typeof edRaw === "string") {
+        try {
+          eventData = JSON.parse(edRaw);
+        } catch {
+          eventData = { _raw: edRaw };
+        }
+      } else {
+        eventData = edRaw;
+      }
     }
   }
-
-  // Collect all recognizable parameters
-  const allParams = extractAllParams(params);
 
   return {
     platform: "tiktok",
@@ -150,7 +161,6 @@ function buildEvent(params, req) {
     eventName: normalizeEventName(eventName),
     eventCategory: categorizeEvent(eventName),
     eventData,
-    allParams,
     pageUrl: params.url || params.page_url || params.dl || null,
     timestamp: params.tt || params.timestamp || req.wallTime || null,
     rawEndpoint: req.endpoint,
@@ -235,29 +245,6 @@ function categorizeEvent(name) {
     if (eventNames.includes(normalized)) return category;
   }
   return "custom";
-}
-
-/**
- * Extract all meaningful parameters from a request.
- */
-function extractAllParams(params) {
-  const meaningful = {};
-  const skipKeys = new Set([
-    "_",
-    "callback",
-    "jsonp",
-    "nonce",
-    "cache",
-    "r",
-  ]);
-
-  for (const [key, value] of Object.entries(params)) {
-    if (skipKeys.has(key)) continue;
-    if (value === undefined || value === null || value === "") continue;
-    meaningful[key] = value;
-  }
-
-  return meaningful;
 }
 
 module.exports = {
