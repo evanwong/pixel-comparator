@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Comparator Report</title>
+<style>
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      line-height: 1.6;
+      padding: 2rem;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header {
+      text-align: center;
+      padding: 2rem 0;
+      border-bottom: 3px solid #e0e0e0;
+      margin-bottom: 2rem;
+    }
+    h1 { font-size: 2rem; color: #1a1a2e; }
+    .subtitle { color: #666; font-size: 1.1rem; margin-top: 0.25rem; }
+    .meta { color: #999; font-size: 0.85rem; margin-top: 0.5rem; }
+    h2 {
+      font-size: 1.4rem;
+      margin: 1.5rem 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    h2 a { color: #2563eb; text-decoration: none; }
+    h2 a:hover { text-decoration: underline; }
+    h3 { font-size: 1.1rem; margin: 1.25rem 0 0.75rem; color: #333; }
+    h4 { font-size: 1rem; margin: 1rem 0 0.5rem; color: #444; }
+
+    /* Stats */
+    .stats-grid {
+      display: flex;
+      gap: 1rem;
+      margin: 1rem 0;
+      flex-wrap: wrap;
+    }
+    .stat-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 1.25rem;
+      flex: 1;
+      min-width: 150px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .stat-card.small { padding: 1rem; }
+    .stat-card.tiktok { border-left: 4px solid #00f2ea; }
+    .stat-card.meta { border-left: 4px solid #1877f2; }
+    .stat-value { font-size: 2rem; font-weight: 700; }
+    .stat-card.tiktok .stat-value { color: #00b8b0; }
+    .stat-card.meta .stat-value { color: #1877f2; }
+    .stat-label { color: #666; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-detail { color: #999; font-size: 0.8rem; margin-top: 0.25rem; }
+
+    /* Health card */
+    .health-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 1.25rem;
+      padding: 1.25rem;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      margin: 1rem 0;
+    }
+    .health-card.excellent { border-left: 4px solid #16a34a; background: #f0fdf4; }
+    .health-card.good { border-left: 4px solid #65a30d; background: #f7fee7; }
+    .health-card.fair { border-left: 4px solid #d97706; background: #fffbeb; }
+    .health-card.poor { border-left: 4px solid #dc2626; background: #fef2f2; }
+    .health-card.none { border-left: 4px solid #9ca3af; background: #f9fafb; }
+    .health-score-ring { flex-shrink: 0; width: 64px; height: 64px; }
+    .health-circle { display: block; }
+    .health-circle-bg {
+      fill: none; stroke: #e5e7eb; stroke-width: 3;
+    }
+    .health-circle-fg {
+      fill: none; stroke-width: 3; stroke-linecap: round;
+      transition: stroke-dasharray 0.4s;
+    }
+    .health-card.excellent .health-circle-fg { stroke: #16a34a; }
+    .health-card.good .health-circle-fg { stroke: #65a30d; }
+    .health-card.fair .health-circle-fg { stroke: #d97706; }
+    .health-card.poor .health-circle-fg { stroke: #dc2626; }
+    .health-card.none .health-circle-fg { stroke: #9ca3af; }
+    .health-score-text {
+      fill: #1a1a2e; font-size: 0.55rem; font-weight: 700;
+      text-anchor: middle; dominant-baseline: middle;
+    }
+    .health-body { flex: 1; }
+    .health-label { font-weight: 600; font-size: 1rem; margin-bottom: 0.35rem; }
+    .badge.health-excellent { background: #dcfce7; color: #166534; }
+    .badge.health-good { background: #ecfccb; color: #365314; }
+    .badge.health-fair { background: #fef3c7; color: #92400e; }
+    .badge.health-poor { background: #fee2e2; color: #991b1b; }
+    .badge.health-none { background: #f3f4f6; color: #374151; }
+    .health-explanation { color: #555; font-size: 0.9rem; margin-bottom: 0.5rem; }
+    .health-issues {
+      margin: 0; padding-left: 1.25rem;
+      font-size: 0.85rem; color: #666;
+      list-style: disc;
+    }
+    .health-issues li { padding: 0.15rem 0; }
+
+    /* Pixel IDs */
+    .pixel-ids { margin: 0.5rem 0; }
+    .pixel-ids code {
+      background: #f0f0f0;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.9rem;
+    }
+
+    /* Tables */
+    .table-wrapper { overflow-x: auto; margin: 0.5rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      font-size: 0.9rem;
+    }
+    th {
+      background: #f8f9fa;
+      padding: 0.6rem 0.75rem;
+      text-align: left;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 2px solid #e0e0e0;
+      white-space: nowrap;
+    }
+    td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #f0f0f0;
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr.matched td { background: #f0fdf4; }
+    tr.match td { background: #f0fdf4; }
+    tr.tiktok_only td { background: #fef3c7; }
+    tr.meta_only td { background: #fef3c7; }
+    tr.count_mismatch td { background: #fef2f2; }
+    tr.diff td { background: #fef2f2; }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge.matched { background: #dcfce7; color: #166534; }
+    .badge.count_mismatch { background: #fee2e2; color: #991b1b; }
+    .badge.tiktok_only { background: #fef3c7; color: #92400e; }
+    .badge.meta_only { background: #fef3c7; color: #92400e; }
+    .badge.pageview { background: #e0e7ff; color: #3730a3; }
+    .badge.ecommerce { background: #fce7f3; color: #9d174d; }
+    .badge.engagement { background: #ccfbf1; color: #115e59; }
+    .badge.conversion { background: #fef9c3; color: #854d0e; }
+    .badge.custom { background: #f3f4f6; color: #374151; }
+
+    /* Param sub-rows inside event table */
+    tr.param-subrow > td {
+      padding: 0;
+      background: #fafbfc;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    .param-details {
+      margin: 0;
+      border: none;
+    }
+    .param-details summary {
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: #555;
+      user-select: none;
+      list-style: none;
+    }
+    .param-details summary::before {
+      content: "\25B6\FE0E ";
+      font-size: 0.7rem;
+      display: inline-block;
+      margin-right: 0.4rem;
+      transition: transform 0.15s;
+    }
+    .param-details[open] summary::before {
+      transform: rotate(90deg);
+    }
+    .param-details summary:hover {
+      background: #f0f1f3;
+    }
+    .param-details .param-table {
+      border-radius: 0;
+      box-shadow: none;
+      font-size: 0.82rem;
+      margin: 0;
+    }
+    .param-details .param-table th {
+      background: #f0f1f3;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.78rem;
+    }
+    .param-details .param-table td {
+      padding: 0.35rem 0.75rem;
+    }
+    .param-details .param-table td.val {
+      max-width: 220px;
+      word-break: break-all;
+    }
+    .param-details .param-table td.empty {
+      color: #bbb;
+    }
+    .param-pct {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.78rem;
+      margin-right: 0.35rem;
+    }
+    .pct-good { background: #dcfce7; color: #166534; }
+    .pct-fair { background: #fef3c7; color: #92400e; }
+    .pct-poor { background: #fee2e2; color: #991b1b; }
+
+    /* Params in detail section */
+    code.params {
+      font-size: 0.8rem;
+      word-break: break-all;
+      display: block;
+      max-width: 400px;
+    }
+
+    /* Observations */
+    .observations {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .observations h3 { margin-top: 0; }
+    .observations ul { list-style: none; }
+    .observations li {
+      padding: 0.4rem 0;
+      border-bottom: 1px solid #f5f5f5;
+    }
+    .observations li:last-child { border-bottom: none; }
+    .obs-icon { margin-right: 0.5rem; }
+    .obs-warning { color: #b45309; }
+    .obs-gap { color: #1d4ed8; }
+    .obs-mismatch, .obs-param_diff { color: #dc2626; }
+    .obs-param_gap { color: #7c3aed; }
+    .obs-good { color: #16a34a; }
+    .obs-info { color: #2563eb; }
+    .obs-coverage, .obs-summary { color: #4b5563; }
+
+    /* Details/accordions */
+    details.pixel-group {
+      margin: 0.5rem 0;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    details.pixel-group summary {
+      padding: 0.75rem 1rem;
+      background: #f8f9fa;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    details.pixel-group summary:hover { background: #f0f0f0; }
+    details.pixel-group[open] summary { border-bottom: 1px solid #e0e0e0; }
+    .no-data { color: #999; font-style: italic; margin: 1rem 0; }
+
+    /* Sections */
+    .summary-section, .page-section {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    .page-section h2 { margin-top: 0; }
+
+    /* Per-pixel comparison sections */
+    .pixel-comparison-section {
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      background: #fafbfc;
+    }
+    .pixel-comparison-section h3 {
+      margin-top: 0;
+      font-size: 1.15rem;
+    }
+    .pixel-comparison-section h3 code {
+      background: #e0f7fa;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    .pixel-comparison-meta {
+      color: #666;
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
+
+    /* Per-Meta-pixel sub-comparison within a TikTok pixel group */
+    .meta-comparison-subsection {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0;
+      background: white;
+    }
+    .meta-comparison-subsection h4 {
+      margin-top: 0;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .meta-comparison-subsection h4 code {
+      background: #e8f0fe;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.9rem;
+      color: #1877f2;
+    }
+    .meta-event-count {
+      font-weight: 400;
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      color: #999;
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 1rem; }
+      .stats-grid { flex-direction: column; }
+    }
+  
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Pixel Comparator Report</h1>
+    <p class="subtitle">TikTok vs Meta/Facebook Pixel Comparison</p>
+    <p class="meta">Generated: 2/23/2026, 10:41:19 AM</p>
+  </header>
+
+  
+  <section class="summary-section">
+    <h2>Overall Summary</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value">1</div>
+        <div class="stat-label">Pages Scanned</div>
+      </div>
+      <div class="stat-card tiktok">
+        <div class="stat-value">0</div>
+        <div class="stat-label">TikTok Events</div>
+        <div class="stat-detail">0 pixel ID(s)</div>
+      </div>
+      <div class="stat-card meta">
+        <div class="stat-value">0</div>
+        <div class="stat-label">Meta Events</div>
+        <div class="stat-detail">0 pixel ID(s)</div>
+      </div>
+    </div>
+
+    
+
+    
+
+    
+    <div class="observations">
+      <h3>Observations</h3>
+      <ul><li class="obs-coverage"><span class="obs-icon">📊</span> 1 of 1 page(s) have no TikTok pixel.</li>
+<li class="obs-coverage"><span class="obs-icon">📊</span> 1 of 1 page(s) have no Meta pixel.</li></ul>
+    </div>
+  </section>
+
+  
+  <section class="page-section">
+    <h2>Page 1: <a href="https://www.peacocktv.com" target="_blank">https://www.peacocktv.com</a></h2>
+
+    <div class="stats-grid">
+      <div class="stat-card tiktok small">
+        <div class="stat-value">0</div>
+        <div class="stat-label">TikTok Events</div>
+        <div class="stat-detail">0 pixel ID(s)</div>
+      </div>
+      <div class="stat-card meta small">
+        <div class="stat-value">0</div>
+        <div class="stat-label">Meta Events</div>
+        <div class="stat-detail">0 pixel ID(s)</div>
+      </div>
+    </div>
+
+    
+    
+    
+    <div class="observations">
+      <h3>Observations</h3>
+      <ul><li class="obs-warning"><span class="obs-icon">⚠</span> No TikTok or Meta pixels detected on this page.</li></ul>
+    </div>
+  </section>
+
+  <footer>
+    <p>Generated by <strong>pixel-comparator</strong></p>
+  </footer>
+</div>
+</body>
+</html>
