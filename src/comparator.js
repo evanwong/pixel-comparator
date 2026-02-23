@@ -90,24 +90,39 @@ function comparePixels(scanResults) {
 
 /**
  * Compare pixel data for a single page.
- * Builds one comparison per TikTok pixel ID, each compared against all Meta events.
+ * Builds one comparison per TikTok pixel ID × Meta pixel ID pair.
+ * Results are grouped by TikTok pixel, with Meta comparisons sorted by health score (highest first).
  */
 function comparePage(url, tiktok, meta) {
-  // Build per-TikTok-pixel comparisons
+  // Build per-TikTok-pixel comparisons, each containing per-Meta-pixel sub-comparisons
   const pixelComparisons = [];
 
   for (const [ttPixelId, ttEvents] of Object.entries(tiktok.byPixelId)) {
-    const eventComparison = compareEvents(ttEvents, meta.events);
-    const paramComparison = compareParameters(ttEvents, meta.events);
-    const health = computePixelHealth(eventComparison, paramComparison, ttEvents, meta.events);
+    const metaComparisons = [];
+
+    for (const [metaPixelId, metaEvts] of Object.entries(meta.byPixelId)) {
+      const eventComparison = compareEvents(ttEvents, metaEvts);
+      const paramComparison = compareParameters(ttEvents, metaEvts);
+      const health = computePixelHealth(eventComparison, paramComparison, ttEvents, metaEvts);
+
+      metaComparisons.push({
+        metaPixelId,
+        metaEventCount: metaEvts.length,
+        metaEvents: metaEvts,
+        eventComparison,
+        paramComparison,
+        health,
+      });
+    }
+
+    // Sort by health score descending (highest match first)
+    metaComparisons.sort((a, b) => b.health.score - a.health.score);
 
     pixelComparisons.push({
       tiktokPixelId: ttPixelId,
       tiktokEventCount: ttEvents.length,
       tiktokEvents: ttEvents,
-      eventComparison,
-      paramComparison,
-      health,
+      metaComparisons,
     });
   }
 
@@ -477,42 +492,47 @@ function generatePageObservations(url, tiktok, meta, pixelComparisons) {
     });
   }
 
-  // Aggregate observations from per-pixel comparisons
+  // Aggregate observations from per-pixel-pair comparisons
   for (const pc of pixelComparisons) {
-    const { eventComparison, paramComparison, tiktokPixelId } = pc;
+    const { tiktokPixelId, metaComparisons } = pc;
 
-    if (eventComparison.tiktokOnly.length > 0) {
-      const events = eventComparison.tiktokOnly.map((e) => e.tiktokEvent).join(", ");
-      observations.push({
-        type: "gap",
-        message: `[${tiktokPixelId}] Events firing on TikTok but NOT on Meta: ${events}`,
-      });
-    }
+    for (const mc of metaComparisons) {
+      const { metaPixelId, eventComparison, paramComparison } = mc;
+      const label = `TT:${tiktokPixelId} vs Meta:${metaPixelId}`;
 
-    if (eventComparison.metaOnly.length > 0) {
-      const events = eventComparison.metaOnly.map((e) => e.metaEvent).join(", ");
-      observations.push({
-        type: "gap",
-        message: `[${tiktokPixelId}] Events firing on Meta but NOT on TikTok: ${events}`,
-      });
-    }
-
-    for (const mismatch of eventComparison.countMismatch) {
-      observations.push({
-        type: "mismatch",
-        message: `[${tiktokPixelId}] "${mismatch.tiktokEvent}" fires ${mismatch.tiktokCount}x on TikTok but ${mismatch.metaCount}x on Meta.`,
-      });
-    }
-
-    for (const paramDiff of paramComparison) {
-      if (paramDiff.differences.length > 0) {
-        const diffs = paramDiff.differences
-          .map((d) => `${d.tiktokKey}="${d.tiktokValue}" vs ${d.metaKey}="${d.metaValue}"`)
-          .join("; ");
+      if (eventComparison.tiktokOnly.length > 0) {
+        const events = eventComparison.tiktokOnly.map((e) => e.tiktokEvent).join(", ");
         observations.push({
-          type: "param_diff",
-          message: `[${tiktokPixelId}] Parameter differences in "${paramDiff.eventName}": ${diffs}`,
+          type: "gap",
+          message: `[${label}] Events firing on TikTok but NOT on Meta: ${events}`,
         });
+      }
+
+      if (eventComparison.metaOnly.length > 0) {
+        const events = eventComparison.metaOnly.map((e) => e.metaEvent).join(", ");
+        observations.push({
+          type: "gap",
+          message: `[${label}] Events firing on Meta but NOT on TikTok: ${events}`,
+        });
+      }
+
+      for (const mismatch of eventComparison.countMismatch) {
+        observations.push({
+          type: "mismatch",
+          message: `[${label}] "${mismatch.tiktokEvent}" fires ${mismatch.tiktokCount}x on TikTok but ${mismatch.metaCount}x on Meta.`,
+        });
+      }
+
+      for (const paramDiff of paramComparison) {
+        if (paramDiff.differences.length > 0) {
+          const diffs = paramDiff.differences
+            .map((d) => `${d.tiktokKey}="${d.tiktokValue}" vs ${d.metaKey}="${d.metaValue}"`)
+            .join("; ");
+          observations.push({
+            type: "param_diff",
+            message: `[${label}] Parameter differences in "${paramDiff.eventName}": ${diffs}`,
+          });
+        }
       }
     }
   }
@@ -552,10 +572,12 @@ function generateOverallObservations(pages) {
     });
   }
 
-  // Check for consistent event parity across all pixel comparisons
+  // Check for consistent event parity across all pixel-pair comparisons
   const allGaps = pages.flatMap((p) =>
     p.pixelComparisons.flatMap((pc) =>
-      pc.eventComparison.tiktokOnly.concat(pc.eventComparison.metaOnly)
+      pc.metaComparisons.flatMap((mc) =>
+        mc.eventComparison.tiktokOnly.concat(mc.eventComparison.metaOnly)
+      )
     )
   );
   if (allGaps.length > 0) {

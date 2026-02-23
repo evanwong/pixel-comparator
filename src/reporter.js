@@ -80,9 +80,9 @@ function renderSummary(summary) {
 }
 
 function renderPage(page, index) {
-  // Render per-TikTok-pixel comparison sections
+  // Render per-TikTok-pixel comparison sections (each contains per-Meta-pixel sub-comparisons)
   const pixelSections = page.pixelComparisons.map((pc) =>
-    renderPixelComparison(pc, page.meta)
+    renderPixelComparison(pc)
   ).join("\n");
 
   // Render Meta-only events (not matched by any TikTok pixel)
@@ -114,22 +114,40 @@ function renderPage(page, index) {
 }
 
 /**
- * Render a comparison section for a single TikTok pixel vs Meta.
+ * Render a comparison section for a single TikTok pixel, containing
+ * sub-sections for each Meta pixel sorted by health score (highest first).
  */
-function renderPixelComparison(pc, meta) {
-  const metaIds = meta.pixelIds.length > 0
-    ? meta.pixelIds.map((id) => `<code>${esc(id)}</code>`).join(", ")
-    : "<em>none</em>";
+function renderPixelComparison(pc) {
+  const metaSections = pc.metaComparisons.map((mc) =>
+    renderMetaSubComparison(mc)
+  ).join("\n");
+
+  const comparisonCount = pc.metaComparisons.length;
+  const subtitle = comparisonCount > 0
+    ? `${pc.tiktokEventCount} TikTok event(s) compared against ${comparisonCount} Meta pixel(s) — sorted by match score`
+    : `${pc.tiktokEventCount} TikTok event(s) — no Meta pixels to compare against`;
 
   return `
     <div class="pixel-comparison-section">
       <h3>TikTok Pixel <code>${esc(pc.tiktokPixelId)}</code></h3>
-      <p class="pixel-comparison-meta">
-        ${pc.tiktokEventCount} TikTok event(s) compared against Meta pixel(s): ${metaIds}
-      </p>
-      ${renderHealthSummary(pc.health)}
-      ${renderEventComparisonTable(pc.eventComparison, pc.paramComparison)}
+      <p class="pixel-comparison-meta">${subtitle}</p>
+      ${comparisonCount === 0 ? '<p class="no-data">No Meta pixels detected on this page.</p>' : ""}
+      ${metaSections}
     </div>`;
+}
+
+/**
+ * Render a sub-comparison for a single Meta pixel within a TikTok pixel group.
+ */
+function renderMetaSubComparison(mc) {
+  return `
+      <div class="meta-comparison-subsection">
+        <h4>vs Meta Pixel <code>${esc(mc.metaPixelId)}</code>
+          <span class="meta-event-count">${mc.metaEventCount} event(s)</span>
+        </h4>
+        ${renderHealthSummary(mc.health)}
+        ${renderEventComparisonTable(mc.eventComparison, mc.paramComparison)}
+      </div>`;
 }
 
 /**
@@ -704,6 +722,34 @@ function getStyles() {
       color: #666;
       font-size: 0.85rem;
       margin-bottom: 0.75rem;
+    }
+
+    /* Per-Meta-pixel sub-comparison within a TikTok pixel group */
+    .meta-comparison-subsection {
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0;
+      background: white;
+    }
+    .meta-comparison-subsection h4 {
+      margin-top: 0;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .meta-comparison-subsection h4 code {
+      background: #e8f0fe;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.9rem;
+      color: #1877f2;
+    }
+    .meta-event-count {
+      font-weight: 400;
+      font-size: 0.8rem;
+      color: #888;
     }
 
     footer {
