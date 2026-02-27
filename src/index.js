@@ -53,25 +53,35 @@ const argv = yargs(hideBin(process.argv))
   .parse();
 
 /**
- * Derive a filesystem-safe report filename from the first URL.
- * e.g. "https://www.example.com/shop/products?q=1" → "example.com-shop-products.html"
+ * Turn a URL string into a filesystem-safe slug.
+ * e.g. "https://www.example.com/shop/products?q=1" → "example.com-shop-products"
  */
-function defaultOutputName(urls) {
+function urlToSlug(url) {
+  const parsed = new URL(url);
+  const host = parsed.hostname.replace(/^www\./, "");
+  const pathPart = parsed.pathname
+    .replace(/\/+$/, "")  // strip trailing slashes
+    .replace(/^\//, "")   // strip leading slash
+    .replace(/\//g, "-"); // slashes → hyphens
+  const slug = pathPart ? `${host}-${pathPart}` : host;
+  return slug
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/-$/, "");
+}
+
+/**
+ * Derive the default report path from a scan result.
+ * Uses the final URL (after redirects) so the name reflects the actual page.
+ */
+function defaultOutputPath(scanResult) {
   try {
-    const parsed = new URL(urls[0]);
-    let host = parsed.hostname.replace(/^www\./, "");
-    let pathPart = parsed.pathname
-      .replace(/\/+$/, "")  // strip trailing slashes
-      .replace(/^\//, "")   // strip leading slash
-      .replace(/\//g, "-"); // slashes → hyphens
-    const slug = pathPart ? `${host}-${pathPart}` : host;
-    // Keep only filesystem-safe chars, collapse repeated hyphens
-    const safe = slug
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]/g, "-")
-      .replace(/-{2,}/g, "-")
-      .replace(/-$/, "");
-    return path.join(REPORTS_DIR, `${safe}.html`);
+    // If there was a redirect chain, the last entry is the true final URL
+    const finalUrl = scanResult.redirectChain
+      ? scanResult.redirectChain[scanResult.redirectChain.length - 1]
+      : scanResult.url;
+    return path.join(REPORTS_DIR, `${urlToSlug(finalUrl)}.html`);
   } catch {
     return path.join(REPORTS_DIR, "pixel-report.html");
   }
@@ -79,7 +89,6 @@ function defaultOutputName(urls) {
 
 async function main() {
   const { urls, timeout, wait, chrome } = argv;
-  const output = argv.output || defaultOutputName(urls);
 
   console.log("Pixel Comparator");
   console.log("=================");
@@ -96,7 +105,8 @@ async function main() {
     // Step 2: Compare TikTok vs Meta pixels
     const report = comparePixels(scanResults);
 
-    // Step 3: Generate HTML report
+    // Step 3: Generate HTML report — use final URL (after redirects) for the filename
+    const output = argv.output || defaultOutputPath(scanResults[0]);
     const outputDir = path.dirname(output);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
