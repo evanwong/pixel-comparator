@@ -95,7 +95,7 @@ async function interceptPixels(urls, options = {}) {
  * @param {number} options.perHopTimeout - Per-request timeout in ms (default 10000)
  * @returns {Promise<{finalUrl: string, chain: string[]}>}
  */
-async function resolveRedirects(inputUrl, { maxRedirects = 20, perHopTimeout = 10000 } = {}) {
+async function resolveRedirects(inputUrl, { maxRedirects = 20, perHopTimeout = 5000 } = {}) {
   const chain = [inputUrl];
   let currentUrl = inputUrl;
   const visited = new Set([currentUrl]);
@@ -150,9 +150,10 @@ async function resolveRedirects(inputUrl, { maxRedirects = 20, perHopTimeout = 1
  * capture only covers the final landing page.
  */
 async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials }) {
-  // --- Phase 1: Resolve redirects before pixel capture ---
+  // --- Phase 1: Try to resolve redirects via HTTP before pixel capture ---
   let targetUrl = url;
   let redirectChain = [];
+  let httpResolutionFailed = false;
 
   try {
     const { finalUrl, chain } = await resolveRedirects(url);
@@ -167,8 +168,9 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
       }
     }
   } catch (err) {
-    console.warn(`  Could not resolve redirects: ${err.message}`);
-    console.warn(`  Falling back to scanning original URL directly`);
+    httpResolutionFailed = true;
+    console.warn(`  Could not pre-resolve redirects via HTTP: ${err.message}`);
+    console.warn(`  Will use browser to follow redirects`);
   }
 
   // --- Phase 2: Scan the resolved URL with pixel capture ---
@@ -211,11 +213,34 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
     }
   });
 
+  let response = null;
   try {
-    await page.goto(targetUrl, {
+    response = await page.goto(targetUrl, {
       waitUntil: "networkidle2",
       timeout,
     });
+
+    // --- Phase 2b: If HTTP resolution failed, detect redirects from browser ---
+    if (httpResolutionFailed) {
+      const browserUrl = page.url();
+      if (browserUrl !== url) {
+        targetUrl = browserUrl;
+        // Try to get the redirect chain from Puppeteer's response
+        const chain = response ? response.request().redirectChain() : [];
+        if (chain.length > 0) {
+          redirectChain = [url, ...chain.map((r) => r.url()), browserUrl];
+          console.log(`  Browser followed redirect (${chain.length} hop${chain.length > 1 ? "s" : ""}):`);
+          console.log(`    ${url}`);
+          for (const req of chain) {
+            console.log(`    → ${req.url()}`);
+          }
+          console.log(`    → ${browserUrl} (final)`);
+        } else {
+          redirectChain = [url, browserUrl];
+          console.log(`  Redirected: ${url} → ${browserUrl}`);
+        }
+      }
+    }
 
     // Dismiss cookie consent banners so consent-gated pixels can fire
     for (const sel of [
@@ -230,6 +255,17 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
     // Wait extra time for late-firing pixels (deferred events, etc.)
     await new Promise((resolve) => setTimeout(resolve, waitAfterLoad));
   } catch (err) {
+    // Even on error, try to capture where the browser ended up
+    if (httpResolutionFailed) {
+      try {
+        const browserUrl = page.url();
+        if (browserUrl && browserUrl !== "about:blank" && browserUrl !== url) {
+          targetUrl = browserUrl;
+          redirectChain = [url, browserUrl];
+          console.log(`  Redirected (before error): ${url} → ${browserUrl}`);
+        }
+      } catch {}
+    }
     console.warn(`  Warning: ${err.message}`);
   }
 
