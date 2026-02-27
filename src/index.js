@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
+const fs = require("fs");
+const path = require("path");
 const yargs = require("yargs");
 const { hideBin } = require("yargs/helpers");
 const { interceptPixels } = require("./interceptor");
 const { comparePixels } = require("./comparator");
 const { generateReport } = require("./reporter");
+
+const REPORTS_DIR = path.join(process.cwd(), "reports");
 
 const argv = yargs(hideBin(process.argv))
   .usage("Usage: $0 --urls <url1> <url2> ... [options]")
@@ -67,9 +71,9 @@ function defaultOutputName(urls) {
       .replace(/[^a-z0-9._-]/g, "-")
       .replace(/-{2,}/g, "-")
       .replace(/-$/, "");
-    return `${safe}.html`;
+    return path.join(REPORTS_DIR, `${safe}.html`);
   } catch {
-    return "pixel-report.html";
+    return path.join(REPORTS_DIR, "pixel-report.html");
   }
 }
 
@@ -93,6 +97,10 @@ async function main() {
     const report = comparePixels(scanResults);
 
     // Step 3: Generate HTML report
+    const outputDir = path.dirname(output);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
     generateReport(report, output);
 
     // Print brief summary to console
