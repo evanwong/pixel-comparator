@@ -1,11 +1,14 @@
 /**
  * Meta/Facebook Pixel Parser
  *
- * Meta pixel fires requests to:
- *   - facebook.com/tr  (standard pixel)
- *   - facebook.com/privacy_sandbox/pixel/register/trigger/  (Attribution Reporting API)
+ * Meta pixel fires requests to facebook.com/tr with events encoded
+ * in query parameters (GET) or POST body.
  *
- * Both endpoints use the same query-parameter schema:
+ * Note: Meta also fires to facebook.com/privacy_sandbox/pixel/register/trigger/
+ * (Attribution Reporting API), but that endpoint carries attribution data in
+ * response headers, not URL params — so it's not useful for our parser.
+ *
+ * Common query parameters:
  *   - id: pixel ID
  *   - ev: event name (e.g. "PageView", "ViewContent", "Purchase")
  *   - cd[...]: custom data parameters (e.g. cd[value], cd[currency], cd[content_type])
