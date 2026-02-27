@@ -551,8 +551,6 @@ function generatePageObservations(url, tiktok, meta, pixelComparisons) {
  */
 function generateOverallObservations(pages) {
   const observations = [];
-  const pagesWithNoTikTok = pages.filter((p) => p.tiktok.eventCount === 0);
-  const pagesWithNoMeta = pages.filter((p) => p.meta.eventCount === 0);
   const pagesWithBoth = pages.filter(
     (p) => p.tiktok.eventCount > 0 && p.meta.eventCount > 0
   );
@@ -562,25 +560,12 @@ function generateOverallObservations(pages) {
     (p) => p.meta.eventCount > 0 && p.tiktok.eventCount === 0
   );
   if (metaButNoTikTok.length > 0) {
-    const urls = metaButNoTikTok.map((p) => p.url);
-    observations.push({
-      type: "critical",
-      message: `${metaButNoTikTok.length} page(s) have Meta pixel but NO TikTok pixel: ${urls.join(", ")}`,
-    });
-  }
-
-  if (pagesWithNoTikTok.length > 0) {
-    observations.push({
-      type: "coverage",
-      message: `${pagesWithNoTikTok.length} of ${pages.length} page(s) have no TikTok pixel.`,
-    });
-  }
-
-  if (pagesWithNoMeta.length > 0) {
-    observations.push({
-      type: "coverage",
-      message: `${pagesWithNoMeta.length} of ${pages.length} page(s) have no Meta pixel.`,
-    });
+    for (const p of metaButNoTikTok) {
+      observations.push({
+        type: "critical",
+        message: `${p.url} — has Meta pixel but NO TikTok pixel`,
+      });
+    }
   }
 
   if (pagesWithBoth.length === pages.length) {

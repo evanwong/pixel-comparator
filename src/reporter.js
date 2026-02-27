@@ -99,28 +99,42 @@ function renderPage(page, index) {
       ? `<div class="redirect-notice">Redirected from <a href="${esc(page.originalUrl)}" target="_blank">${esc(page.originalUrl)}</a></div>`
       : "";
 
+  const hasMeta = page.meta.eventCount > 0;
+  const hasTikTok = page.tiktok.eventCount > 0;
+  const isCritical = hasMeta && !hasTikTok;
+  const statusBadge = isCritical
+    ? '<span class="page-badge page-badge-critical">Missing TikTok</span>'
+    : !hasMeta && !hasTikTok
+      ? '<span class="page-badge page-badge-none">No Pixels</span>'
+      : '<span class="page-badge page-badge-ok">OK</span>';
+
   return `
-  <section class="page-section">
-    <h2>Page ${index + 1}: <a href="${esc(page.url)}" target="_blank">${esc(page.url)}</a></h2>
-    ${redirectNote}
+  <details class="page-section-collapsible">
+    <summary class="page-section-header${isCritical ? " page-section-critical" : ""}">
+      <h2>Page ${index + 1}: <a href="${esc(page.url)}" target="_blank">${esc(page.url)}</a> ${statusBadge}</h2>
+      <span class="page-toggle-hint">TikTok: ${page.tiktok.eventCount} events &middot; Meta: ${page.meta.eventCount} events</span>
+    </summary>
+    <div class="page-section-body">
+      ${redirectNote}
 
-    <div class="stats-grid">
-      <div class="stat-card tiktok small">
-        <div class="stat-value">${page.tiktok.eventCount}</div>
-        <div class="stat-label">TikTok Events</div>
-        <div class="stat-detail">${page.tiktok.pixelIds.length} pixel ID(s)</div>
+      <div class="stats-grid">
+        <div class="stat-card tiktok small">
+          <div class="stat-value">${page.tiktok.eventCount}</div>
+          <div class="stat-label">TikTok Events</div>
+          <div class="stat-detail">${page.tiktok.pixelIds.length} pixel ID(s)</div>
+        </div>
+        <div class="stat-card meta small">
+          <div class="stat-value">${page.meta.eventCount}</div>
+          <div class="stat-label">Meta Events</div>
+          <div class="stat-detail">${page.meta.pixelIds.length} pixel ID(s)</div>
+        </div>
       </div>
-      <div class="stat-card meta small">
-        <div class="stat-value">${page.meta.eventCount}</div>
-        <div class="stat-label">Meta Events</div>
-        <div class="stat-detail">${page.meta.pixelIds.length} pixel ID(s)</div>
-      </div>
+
+      ${pixelSections}
+      ${metaOnlySection}
+      ${renderObservations(page.observations)}
     </div>
-
-    ${pixelSections}
-    ${metaOnlySection}
-    ${renderObservations(page.observations)}
-  </section>`;
+  </details>`;
 }
 
 /**
@@ -849,7 +863,7 @@ function getStyles() {
     .no-data { color: #999; font-style: italic; margin: 1rem 0; }
 
     /* Sections */
-    .summary-section, .page-section {
+    .summary-section {
       background: white;
       border: 1px solid #e0e0e0;
       border-radius: 12px;
@@ -857,7 +871,81 @@ function getStyles() {
       margin-bottom: 2rem;
       box-shadow: 0 2px 4px rgba(0,0,0,0.04);
     }
-    .page-section h2 { margin-top: 0; }
+
+    /* Collapsible page sections */
+    .page-section-collapsible {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+      overflow: hidden;
+    }
+    .page-section-header {
+      padding: 1.25rem 1.5rem;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .page-section-header::-webkit-details-marker { display: none; }
+    .page-section-header::before {
+      content: "▶";
+      font-size: 0.75rem;
+      color: #6b7280;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+    details[open] > .page-section-header::before {
+      transform: rotate(90deg);
+    }
+    .page-section-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
+      flex: 1;
+    }
+    .page-section-header.page-section-critical {
+      background: #fef2f2;
+      border-bottom-color: #fca5a5;
+    }
+    .page-toggle-hint {
+      font-size: 0.85rem;
+      color: #6b7280;
+      white-space: nowrap;
+    }
+    .page-section-body {
+      padding: 1.5rem;
+    }
+    .page-section-body h2 { margin-top: 0; }
+
+    /* Page status badges */
+    .page-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .page-badge-ok {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .page-badge-critical {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+    .page-badge-none {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
 
     /* Per-pixel comparison sections */
     .pixel-comparison-section {
