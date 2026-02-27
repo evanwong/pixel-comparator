@@ -86,7 +86,8 @@ async function interceptPixels(urls, options = {}) {
 
 /**
  * Follow HTTP redirects (301/302/303/307/308) to resolve the final landing URL.
- * Uses lightweight HEAD requests so no page rendering is needed.
+ * Uses GET requests (many ad servers ignore HEAD) and aborts the response body
+ * immediately after reading status + headers to stay lightweight.
  *
  * @param {string} inputUrl - Starting URL that may redirect
  * @param {object} options
@@ -105,12 +106,13 @@ async function resolveRedirects(inputUrl, { maxRedirects = 20, perHopTimeout = 1
 
     const result = await new Promise((resolve, reject) => {
       const req = client.request(currentUrl, {
-        method: "HEAD",
+        method: "GET",
         headers: { "User-Agent": CHROME_UA },
         timeout: perHopTimeout,
         rejectUnauthorized: false,
       }, (res) => {
-        res.resume();
+        // Immediately destroy the socket — we only need status + headers
+        res.destroy();
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           const nextUrl = new URL(res.headers.location, currentUrl).href;
           resolve({ redirect: true, nextUrl });
@@ -118,7 +120,11 @@ async function resolveRedirects(inputUrl, { maxRedirects = 20, perHopTimeout = 1
           resolve({ redirect: false });
         }
       });
-      req.on("error", reject);
+      req.on("error", (err) => {
+        // Socket destruction above may cause ECONNRESET — that's expected, not an error
+        if (err.code === "ECONNRESET") return;
+        reject(err);
+      });
       req.on("timeout", () => { req.destroy(); reject(new Error("Redirect resolution timed out")); });
       req.end();
     });
@@ -230,7 +236,7 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
   await page.close();
 
   console.log(
-    `  Found ${tiktokRequests.length} TikTok request(s), ${metaRequests.length} Meta request(s)`
+    `  Captured ${tiktokRequests.length} TikTok raw request(s), ${metaRequests.length} Meta raw request(s)`
   );
 
   return {

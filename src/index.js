@@ -71,7 +71,7 @@ async function main() {
     generateReport(report, output);
 
     // Print brief summary to console
-    printSummary(report);
+    printSummary(report, scanResults);
   } catch (err) {
     console.error(`\nError: ${err.message}`);
     if (err.message.includes("executable") || err.message.includes("launch")) {
@@ -84,14 +84,28 @@ async function main() {
   }
 }
 
-function printSummary(report) {
+function printSummary(report, scanResults) {
   const s = report.summary;
+
+  // Count raw requests vs parsed events so the user sees what got filtered
+  let rawTikTok = 0;
+  let rawMeta = 0;
+  for (const r of scanResults) {
+    rawTikTok += r.tiktokRequests.length;
+    rawMeta += r.metaRequests.length;
+  }
+
   console.log("\n--- Summary ---");
   console.log(`Pages scanned:      ${s.pagesScanned}`);
   console.log(`TikTok pixel IDs:   ${s.tiktokPixelIds.length > 0 ? s.tiktokPixelIds.join(", ") : "none"}`);
   console.log(`Meta pixel IDs:     ${s.metaPixelIds.length > 0 ? s.metaPixelIds.join(", ") : "none"}`);
-  console.log(`TikTok events:      ${s.totalTikTokEvents}`);
-  console.log(`Meta events:        ${s.totalMetaEvents}`);
+  console.log(`TikTok events:      ${s.totalTikTokEvents} (from ${rawTikTok} raw request${rawTikTok !== 1 ? "s" : ""})`);
+  console.log(`Meta events:        ${s.totalMetaEvents} (from ${rawMeta} raw request${rawMeta !== 1 ? "s" : ""})`);
+
+  if (rawTikTok !== s.totalTikTokEvents || rawMeta !== s.totalMetaEvents) {
+    console.log(`  Note: Raw requests are filtered — internal events (LandingPageView, EngagedSession) and`);
+    console.log(`        requests without a pixel ID are excluded from the event count.`);
+  }
 
   if (s.overallObservations.length > 0) {
     console.log("\nObservations:");
