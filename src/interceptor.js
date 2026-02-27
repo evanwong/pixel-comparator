@@ -197,20 +197,38 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
   const tiktokRequests = [];
   const metaRequests = [];
 
-  // Listen to all network requests via CDP
+  // Helper: attach network listener to a CDP session
+  function attachNetworkListener(cdpSession) {
+    cdpSession.send("Network.enable").catch(() => {});
+    cdpSession.on("Network.requestWillBeSent", (event) => {
+      const requestUrl = event.request.url;
+
+      if (TIKTOK_PATTERN.test(requestUrl)) {
+        tiktokRequests.push(buildRequestRecord(event, "tiktok"));
+      }
+
+      if (META_PATTERN.test(requestUrl)) {
+        metaRequests.push(buildRequestRecord(event, "meta"));
+      }
+    });
+  }
+
+  // Listen to all network requests via CDP (main frame)
   const client = await page.createCDPSession();
-  await client.send("Network.enable");
+  attachNetworkListener(client);
 
-  client.on("Network.requestWillBeSent", (event) => {
-    const requestUrl = event.request.url;
+  // Auto-attach to cross-origin iframe (OOPIF) targets so we capture
+  // pixel requests fired from within iframes (e.g. GTM, noscript fallbacks).
+  // With flatten:true, Puppeteer emits 'sessionattached' on the parent
+  // CDPSession when a child target is attached.
+  await client.send("Target.setAutoAttach", {
+    autoAttach: true,
+    waitForDebuggerOnStart: false,
+    flatten: true,
+  });
 
-    if (TIKTOK_PATTERN.test(requestUrl)) {
-      tiktokRequests.push(buildRequestRecord(event, "tiktok"));
-    }
-
-    if (META_PATTERN.test(requestUrl)) {
-      metaRequests.push(buildRequestRecord(event, "meta"));
-    }
+  client.on("sessionattached", (childSession) => {
+    attachNetworkListener(childSession);
   });
 
   let response = null;
