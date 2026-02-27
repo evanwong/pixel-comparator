@@ -578,7 +578,7 @@ function getStyles() {
     tr.match td { background: #f0fdf4; }
     tr.tiktok_only td { background: #fef3c7; }
     tr.meta_only td { background: #fef3c7; }
-    tr.count_mismatch td { background: #fef2f2; }
+    tr.count_mismatch td { background: #fff7ed; }
     tr.diff td { background: #fef2f2; }
 
     /* Badges */
@@ -591,7 +591,7 @@ function getStyles() {
       white-space: nowrap;
     }
     .badge.matched { background: #dcfce7; color: #166534; }
-    .badge.count_mismatch { background: #fee2e2; color: #991b1b; }
+    .badge.count_mismatch { background: #ffedd5; color: #9a3412; }
     .badge.tiktok_only { background: #fef3c7; color: #92400e; }
     .badge.meta_only { background: #fef3c7; color: #92400e; }
     .badge.pageview { background: #e0e7ff; color: #3730a3; }
@@ -691,7 +691,8 @@ function getStyles() {
     .obs-icon { margin-right: 0.5rem; }
     .obs-warning { color: #b45309; }
     .obs-gap { color: #1d4ed8; }
-    .obs-mismatch, .obs-param_diff { color: #dc2626; }
+    .obs-mismatch { color: #c2410c; }
+    .obs-param_diff { color: #dc2626; }
     .obs-param_gap { color: #7c3aed; }
     .obs-good { color: #16a34a; }
     .obs-info { color: #2563eb; }
