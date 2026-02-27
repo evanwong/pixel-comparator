@@ -17,8 +17,7 @@ const argv = yargs(hideBin(process.argv))
   .option("output", {
     alias: "o",
     type: "string",
-    describe: "Output file path for the HTML report",
-    default: "pixel-report.html",
+    describe: "Output file path for the HTML report (default: auto-generated from URL)",
   })
   .option("timeout", {
     alias: "t",
@@ -49,8 +48,34 @@ const argv = yargs(hideBin(process.argv))
   .wrap(Math.min(100, yargs.terminalWidth?.() || 100))
   .parse();
 
+/**
+ * Derive a filesystem-safe report filename from the first URL.
+ * e.g. "https://www.example.com/shop/products?q=1" → "example.com-shop-products.html"
+ */
+function defaultOutputName(urls) {
+  try {
+    const parsed = new URL(urls[0]);
+    let host = parsed.hostname.replace(/^www\./, "");
+    let pathPart = parsed.pathname
+      .replace(/\/+$/, "")  // strip trailing slashes
+      .replace(/^\//, "")   // strip leading slash
+      .replace(/\//g, "-"); // slashes → hyphens
+    const slug = pathPart ? `${host}-${pathPart}` : host;
+    // Keep only filesystem-safe chars, collapse repeated hyphens
+    const safe = slug
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]/g, "-")
+      .replace(/-{2,}/g, "-")
+      .replace(/-$/, "");
+    return `${safe}.html`;
+  } catch {
+    return "pixel-report.html";
+  }
+}
+
 async function main() {
-  const { urls, output, timeout, wait, chrome } = argv;
+  const { urls, timeout, wait, chrome } = argv;
+  const output = argv.output || defaultOutputName(urls);
 
   console.log("Pixel Comparator");
   console.log("=================");
