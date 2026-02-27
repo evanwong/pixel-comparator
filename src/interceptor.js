@@ -5,10 +5,12 @@ const http = require("http");
 /**
  * Patterns for matching pixel network requests.
  * TikTok pixel fires to analytics.tiktok.com/api/v2/pixel
- * Meta/Facebook pixel fires to facebook.com/tr
+ * Meta/Facebook pixel fires to:
+ *   - facebook.com/tr (standard pixel)
+ *   - facebook.com/privacy_sandbox/pixel/... (Attribution Reporting API)
  */
 const TIKTOK_PATTERN = /analytics\.tiktok\.com\/api\/v2\/pixel/i;
-const META_PATTERN = /facebook\.com\/tr/i;
+const META_PATTERN = /facebook\.com\/(tr|privacy_sandbox\/pixel)/i;
 
 const CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
