@@ -111,7 +111,7 @@ async function main() {
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-    generateReport(report, output);
+    generateReport(report, output, scanResults);
 
     // Print brief summary to console
     printSummary(report, scanResults);
