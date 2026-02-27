@@ -33,7 +33,7 @@ const argv = yargs(hideBin(process.argv))
     alias: "w",
     type: "number",
     describe: "Extra milliseconds to wait after page load for late-firing pixels",
-    default: 3000,
+    default: 8000,
   })
   .option("chrome", {
     type: "string",
