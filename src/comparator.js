@@ -73,6 +73,9 @@ function comparePixels(scanResults) {
     totalMetaEvents += meta.events.length;
 
     const pageComparison = comparePage(result.url, tiktok, meta);
+    if (result.originalUrl) {
+      pageComparison.originalUrl = result.originalUrl;
+    }
     report.pages.push(pageComparison);
   }
 

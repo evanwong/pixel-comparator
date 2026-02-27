@@ -90,9 +90,14 @@ function renderPage(page, index) {
     ? renderMetaOnlySection(page.metaOnlyEvents, page.meta)
     : "";
 
+  const redirectNote = page.originalUrl
+    ? `<div class="redirect-notice">Redirected from <a href="${esc(page.originalUrl)}" target="_blank">${esc(page.originalUrl)}</a></div>`
+    : "";
+
   return `
   <section class="page-section">
     <h2>Page ${index + 1}: <a href="${esc(page.url)}" target="_blank">${esc(page.url)}</a></h2>
+    ${redirectNote}
 
     <div class="stats-grid">
       <div class="stat-card tiktok small">
@@ -750,6 +755,21 @@ function getStyles() {
       font-weight: 400;
       font-size: 0.8rem;
       color: #888;
+    }
+
+    .redirect-notice {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-left: 4px solid #3b82f6;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      color: #1e40af;
+      margin: 0.5rem 0 1rem;
+    }
+    .redirect-notice a {
+      color: #1d4ed8;
+      text-decoration: underline;
     }
 
     footer {

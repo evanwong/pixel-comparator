@@ -125,11 +125,29 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
     }
   });
 
+  let finalUrl = url;
+
   try {
-    await page.goto(url, {
+    const response = await page.goto(url, {
       waitUntil: "networkidle2",
       timeout,
     });
+
+    // Detect redirects: compare the final URL to the original
+    finalUrl = page.url();
+    if (finalUrl !== url) {
+      const chain = response ? response.request().redirectChain() : [];
+      if (chain.length > 0) {
+        console.log(`  Redirect detected (${chain.length} hop${chain.length > 1 ? "s" : ""}):`);
+        console.log(`    ${url}`);
+        for (const req of chain) {
+          console.log(`    → ${req.url()}`);
+        }
+        console.log(`    → ${finalUrl} (final)`);
+      } else {
+        console.log(`  Redirected: ${url} → ${finalUrl}`);
+      }
+    }
 
     // Dismiss cookie consent banners so consent-gated pixels can fire
     for (const sel of [
@@ -154,7 +172,8 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
   );
 
   return {
-    url,
+    url: finalUrl,
+    originalUrl: finalUrl !== url ? url : undefined,
     scannedAt: new Date().toISOString(),
     tiktokRequests,
     metaRequests,
