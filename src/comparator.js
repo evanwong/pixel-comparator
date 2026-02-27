@@ -557,6 +557,18 @@ function generateOverallObservations(pages) {
     (p) => p.tiktok.eventCount > 0 && p.meta.eventCount > 0
   );
 
+  // Critical: pages that have Meta pixel but NO TikTok pixel
+  const metaButNoTikTok = pages.filter(
+    (p) => p.meta.eventCount > 0 && p.tiktok.eventCount === 0
+  );
+  if (metaButNoTikTok.length > 0) {
+    const urls = metaButNoTikTok.map((p) => p.url);
+    observations.push({
+      type: "critical",
+      message: `${metaButNoTikTok.length} page(s) have Meta pixel but NO TikTok pixel: ${urls.join(", ")}`,
+    });
+  }
+
   if (pagesWithNoTikTok.length > 0) {
     observations.push({
       type: "coverage",

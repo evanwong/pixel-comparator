@@ -495,9 +495,12 @@ function renderParamTable(title, entries) {
 function renderObservations(observations) {
   if (!observations || observations.length === 0) return "";
 
+  const hasCritical = observations.some((obs) => obs.type === "critical");
+
   const items = observations
     .map((obs) => {
       const icon = {
+        critical: "🚩",
         warning: "⚠",
         info: "ℹ",
         gap: "🔍",
@@ -513,9 +516,11 @@ function renderObservations(observations) {
     })
     .join("\n");
 
+  const wrapperClass = hasCritical ? "observations observations-has-critical" : "observations";
+
   return `
-    <div class="observations">
-      <h3>Observations</h3>
+    <div class="${wrapperClass}">
+      <h3>${hasCritical ? "⚠ Observations" : "Observations"}</h3>
       <ul>${items}</ul>
     </div>`;
 }
@@ -773,18 +778,23 @@ function getStyles() {
 
     /* Observations */
     .observations {
-      background: white;
-      border: 1px solid #e0e0e0;
+      background: #fffbeb;
+      border: 2px solid #f59e0b;
       border-radius: 8px;
-      padding: 1rem 1.25rem;
-      margin: 1rem 0;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      padding: 1.25rem 1.5rem;
+      margin: 1.5rem 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
-    .observations h3 { margin-top: 0; }
+    .observations h3 {
+      margin-top: 0;
+      font-size: 1.2rem;
+      color: #92400e;
+    }
     .observations ul { list-style: none; }
     .observations li {
-      padding: 0.4rem 0;
-      border-bottom: 1px solid #f5f5f5;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #fde68a;
+      font-size: 0.95rem;
     }
     .observations li:last-child { border-bottom: none; }
     .obs-icon { margin-right: 0.5rem; }
@@ -796,6 +806,30 @@ function getStyles() {
     .obs-good { color: #16a34a; }
     .obs-info { color: #2563eb; }
     .obs-coverage, .obs-summary { color: #4b5563; }
+
+    /* Critical red-flag observations */
+    .observations-has-critical {
+      background: #fef2f2;
+      border: 2px solid #dc2626;
+      box-shadow: 0 2px 12px rgba(220,38,38,0.15);
+    }
+    .observations-has-critical h3 {
+      color: #991b1b;
+      font-size: 1.3rem;
+    }
+    .observations-has-critical li {
+      border-bottom-color: #fecaca;
+    }
+    .obs-critical {
+      color: #dc2626;
+      font-weight: 700;
+      font-size: 1rem;
+      background: #fee2e2;
+      padding: 0.6rem 0.75rem !important;
+      border-radius: 6px;
+      margin: 0.25rem 0;
+      border: 1px solid #fca5a5;
+    }
 
     /* Details/accordions */
     details.pixel-group {
