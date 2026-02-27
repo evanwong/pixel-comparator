@@ -1,4 +1,6 @@
 const puppeteer = require("puppeteer");
+const https = require("https");
+const http = require("http");
 
 /**
  * Patterns for matching pixel network requests.
@@ -7,6 +9,8 @@ const puppeteer = require("puppeteer");
  */
 const TIKTOK_PATTERN = /analytics\.tiktok\.com\/api\/v2\/pixel/i;
 const META_PATTERN = /facebook\.com\/tr/i;
+
+const CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 /**
  * Launch a browser, navigate to each URL, wait for full page load,
@@ -81,12 +85,89 @@ async function interceptPixels(urls, options = {}) {
 }
 
 /**
+ * Follow HTTP redirects (301/302/303/307/308) to resolve the final landing URL.
+ * Uses lightweight HEAD requests so no page rendering is needed.
+ *
+ * @param {string} inputUrl - Starting URL that may redirect
+ * @param {object} options
+ * @param {number} options.maxRedirects - Max hops to follow (default 20)
+ * @param {number} options.perHopTimeout - Per-request timeout in ms (default 10000)
+ * @returns {Promise<{finalUrl: string, chain: string[]}>}
+ */
+async function resolveRedirects(inputUrl, { maxRedirects = 20, perHopTimeout = 10000 } = {}) {
+  const chain = [inputUrl];
+  let currentUrl = inputUrl;
+  const visited = new Set([currentUrl]);
+
+  for (let i = 0; i < maxRedirects; i++) {
+    const parsedUrl = new URL(currentUrl);
+    const client = parsedUrl.protocol === "https:" ? https : http;
+
+    const result = await new Promise((resolve, reject) => {
+      const req = client.request(currentUrl, {
+        method: "HEAD",
+        headers: { "User-Agent": CHROME_UA },
+        timeout: perHopTimeout,
+        rejectUnauthorized: false,
+      }, (res) => {
+        res.resume();
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+          const nextUrl = new URL(res.headers.location, currentUrl).href;
+          resolve({ redirect: true, nextUrl });
+        } else {
+          resolve({ redirect: false });
+        }
+      });
+      req.on("error", reject);
+      req.on("timeout", () => { req.destroy(); reject(new Error("Redirect resolution timed out")); });
+      req.end();
+    });
+
+    if (!result.redirect) break;
+
+    if (visited.has(result.nextUrl)) {
+      console.warn(`  Warning: circular redirect detected at ${result.nextUrl}`);
+      break;
+    }
+
+    currentUrl = result.nextUrl;
+    visited.add(currentUrl);
+    chain.push(currentUrl);
+  }
+
+  return { finalUrl: currentUrl, chain };
+}
+
+/**
  * Scan a single page and capture pixel requests.
+ * If the URL redirects, resolves the redirect chain first so that pixel
+ * capture only covers the final landing page.
  */
 async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials }) {
+  // --- Phase 1: Resolve redirects before pixel capture ---
+  let targetUrl = url;
+  let redirectChain = [];
+
+  try {
+    const { finalUrl, chain } = await resolveRedirects(url);
+    if (finalUrl !== url) {
+      redirectChain = chain;
+      targetUrl = finalUrl;
+      console.log(`  Redirect chain (${chain.length - 1} hop${chain.length - 1 > 1 ? "s" : ""}):`);
+      for (let i = 0; i < chain.length; i++) {
+        const prefix = i === 0 ? "   " : "    →";
+        const suffix = i === chain.length - 1 ? " (final)" : "";
+        console.log(`${prefix} ${chain[i]}${suffix}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`  Could not resolve redirects: ${err.message}`);
+    console.warn(`  Falling back to scanning original URL directly`);
+  }
+
+  // --- Phase 2: Scan the resolved URL with pixel capture ---
   const page = await browser.newPage();
 
-  // Authenticate with proxy if credentials are available
   if (proxyCredentials) {
     await page.authenticate(proxyCredentials);
   }
@@ -96,7 +177,6 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
   // client (which happens when an intercepting proxy re-encrypts traffic).
   // Workaround: send a non-browser UA at the HTTP level so the TLS fingerprint
   // matches, then override navigator.userAgent in JS so tracking scripts see Chrome.
-  const CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
   const httpUA = proxyCredentials ? "curl/8.5.0" : CHROME_UA;
   await page.setUserAgent(httpUA);
   if (proxyCredentials) {
@@ -125,29 +205,11 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
     }
   });
 
-  let finalUrl = url;
-
   try {
-    const response = await page.goto(url, {
+    await page.goto(targetUrl, {
       waitUntil: "networkidle2",
       timeout,
     });
-
-    // Detect redirects: compare the final URL to the original
-    finalUrl = page.url();
-    if (finalUrl !== url) {
-      const chain = response ? response.request().redirectChain() : [];
-      if (chain.length > 0) {
-        console.log(`  Redirect detected (${chain.length} hop${chain.length > 1 ? "s" : ""}):`);
-        console.log(`    ${url}`);
-        for (const req of chain) {
-          console.log(`    → ${req.url()}`);
-        }
-        console.log(`    → ${finalUrl} (final)`);
-      } else {
-        console.log(`  Redirected: ${url} → ${finalUrl}`);
-      }
-    }
 
     // Dismiss cookie consent banners so consent-gated pixels can fire
     for (const sel of [
@@ -172,8 +234,9 @@ async function scanPage(browser, url, { timeout, waitAfterLoad, proxyCredentials
   );
 
   return {
-    url: finalUrl,
-    originalUrl: finalUrl !== url ? url : undefined,
+    url: targetUrl,
+    originalUrl: targetUrl !== url ? url : undefined,
+    redirectChain: redirectChain.length > 0 ? redirectChain : undefined,
     scannedAt: new Date().toISOString(),
     tiktokRequests,
     metaRequests,

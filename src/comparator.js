@@ -76,6 +76,9 @@ function comparePixels(scanResults) {
     if (result.originalUrl) {
       pageComparison.originalUrl = result.originalUrl;
     }
+    if (result.redirectChain) {
+      pageComparison.redirectChain = result.redirectChain;
+    }
     report.pages.push(pageComparison);
   }
 

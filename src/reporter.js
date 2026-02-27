@@ -90,9 +90,11 @@ function renderPage(page, index) {
     ? renderMetaOnlySection(page.metaOnlyEvents, page.meta)
     : "";
 
-  const redirectNote = page.originalUrl
-    ? `<div class="redirect-notice">Redirected from <a href="${esc(page.originalUrl)}" target="_blank">${esc(page.originalUrl)}</a></div>`
-    : "";
+  const redirectNote = page.redirectChain
+    ? renderRedirectChain(page.redirectChain)
+    : page.originalUrl
+      ? `<div class="redirect-notice">Redirected from <a href="${esc(page.originalUrl)}" target="_blank">${esc(page.originalUrl)}</a></div>`
+      : "";
 
   return `
   <section class="page-section">
@@ -116,6 +118,24 @@ function renderPage(page, index) {
     ${metaOnlySection}
     ${renderObservations(page.observations)}
   </section>`;
+}
+
+/**
+ * Render a redirect chain as a visual hop-by-hop list.
+ */
+function renderRedirectChain(chain) {
+  if (!chain || chain.length < 2) return "";
+  const hops = chain.length - 1;
+  const steps = chain.map((url, i) => {
+    const label = i === 0 ? "Original" : i === chain.length - 1 ? "Final" : `Hop ${i}`;
+    return `<div class="redirect-step"><span class="redirect-label">${label}</span> <a href="${esc(url)}" target="_blank">${esc(url)}</a></div>`;
+  }).join('<div class="redirect-arrow">&darr;</div>');
+
+  return `
+    <div class="redirect-notice">
+      <strong>Redirect chain (${hops} hop${hops > 1 ? "s" : ""}):</strong>
+      <div class="redirect-chain">${steps}</div>
+    </div>`;
 }
 
 /**
@@ -762,7 +782,7 @@ function getStyles() {
       border: 1px solid #bfdbfe;
       border-left: 4px solid #3b82f6;
       border-radius: 6px;
-      padding: 0.5rem 0.75rem;
+      padding: 0.75rem 1rem;
       font-size: 0.85rem;
       color: #1e40af;
       margin: 0.5rem 0 1rem;
@@ -770,6 +790,26 @@ function getStyles() {
     .redirect-notice a {
       color: #1d4ed8;
       text-decoration: underline;
+      word-break: break-all;
+    }
+    .redirect-chain {
+      margin-top: 0.5rem;
+    }
+    .redirect-step {
+      padding: 0.2rem 0;
+    }
+    .redirect-label {
+      display: inline-block;
+      min-width: 4.5rem;
+      font-weight: 600;
+      font-size: 0.78rem;
+      color: #3b82f6;
+    }
+    .redirect-arrow {
+      padding-left: 1.5rem;
+      color: #93c5fd;
+      font-size: 0.8rem;
+      line-height: 1;
     }
 
     footer {
