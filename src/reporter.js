@@ -557,12 +557,13 @@ function buildCsvExportScript(report) {
     const url = page.url;
 
     for (const pc of page.pixelComparisons) {
+      const ttPixel = pc.tiktokPixelId;
+
       for (const mc of pc.metaComparisons) {
         // Build a map of params for meta-only events from paramComparison
         const metaOnlyParams = {};
         for (const pcomp of mc.paramComparison) {
           if (pcomp.metaOnly.length > 0 && pcomp.matches.length === 0 && pcomp.tiktokOnly.length === 0) {
-            // Entirely meta-only event — all params belong to missing event row
             metaOnlyParams[pcomp.eventName] = pcomp.metaOnly.map((p) => p.key);
           }
         }
@@ -571,15 +572,15 @@ function buildCsvExportScript(report) {
         for (const m of mc.eventComparison.metaOnly) {
           const eventName = m.metaEvent || m.tiktokEvent;
           const params = metaOnlyParams[eventName] || [];
-          rows.push({ url, missingEvent: eventName, matchedEvent: "", params: params.join("; ") });
+          rows.push({ ttPixel, url, missingEvent: eventName, matchedEvent: "", params: params.join("; ") });
         }
 
         // For matched/count_mismatch events: only export params missing from TikTok
         for (const pcomp of mc.paramComparison) {
-          if (metaOnlyParams[pcomp.eventName]) continue; // already handled above
+          if (metaOnlyParams[pcomp.eventName]) continue;
           const missingFromTikTok = pcomp.metaOnly.map((p) => p.key);
           if (missingFromTikTok.length > 0) {
-            rows.push({ url, missingEvent: "", matchedEvent: pcomp.eventName, params: missingFromTikTok.join("; ") });
+            rows.push({ ttPixel, url, missingEvent: "", matchedEvent: pcomp.eventName, params: missingFromTikTok.join("; ") });
           }
         }
       }
@@ -589,21 +590,30 @@ function buildCsvExportScript(report) {
     if (page.metaOnlyEvents) {
       for (const e of page.metaOnlyEvents) {
         const params = e.customData ? Object.keys(e.customData) : [];
-        rows.push({ url, missingEvent: e.eventName, matchedEvent: "", params: params.join("; ") });
+        const ttPixel = page.tiktok.pixelIds.length > 0 ? page.tiktok.pixelIds.join("; ") : "";
+        rows.push({ ttPixel, url, missingEvent: e.eventName, matchedEvent: "", params: params.join("; ") });
       }
     }
   }
 
-  // Escape for embedding in JS string
-  const csvData = JSON.stringify(rows);
+  // Deduplicate rows
+  const seen = new Set();
+  const uniqueRows = rows.filter((r) => {
+    const key = `${r.ttPixel}|${r.url}|${r.missingEvent}|${r.matchedEvent}|${r.params}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const csvData = JSON.stringify(uniqueRows);
 
   return `
     var _csvRows = ${csvData};
     function exportCsv() {
-      var lines = ["URL,MissingEvent,MatchedEvent,MissingParameters"];
+      var lines = ["TikTokPixel,URL,MissingEvent,MatchedEvent,MissingParameters"];
       for (var i = 0; i < _csvRows.length; i++) {
         var r = _csvRows[i];
-        lines.push(csvField(r.url) + "," + csvField(r.missingEvent) + "," + csvField(r.matchedEvent) + "," + csvField(r.params));
+        lines.push(csvField(r.ttPixel) + "," + csvField(r.url) + "," + csvField(r.missingEvent) + "," + csvField(r.matchedEvent) + "," + csvField(r.params));
       }
       var blob = new Blob([lines.join("\\n")], { type: "text/csv" });
       var a = document.createElement("a");
