@@ -1,5 +1,17 @@
 const fs = require("fs");
 const path = require("path");
+const { TIKTOK_STANDARD_EVENTS } = require("./parsers/tiktok");
+const { META_STANDARD_EVENTS } = require("./parsers/meta");
+
+const STANDARD_EVENTS = new Set([
+  ...TIKTOK_STANDARD_EVENTS.map((e) => e.toLowerCase()),
+  ...META_STANDARD_EVENTS.map((e) => e.toLowerCase()),
+]);
+
+function isStandardEvent(name) {
+  if (!name) return false;
+  return STANDARD_EVENTS.has(String(name).toLowerCase());
+}
 
 /**
  * Generate an HTML report from a comparison result and write it to disk.
@@ -15,6 +27,17 @@ function generateReport(report, outputPath, scanResults) {
 }
 
 function buildHtml(report, scanResults) {
+  // Pre-compute standard event counts for the filter checkbox
+  let totalStdTT = 0, totalStdMeta = 0;
+  for (const page of report.pages) {
+    page._stdTTCount = page.tiktok.events.filter((e) => isStandardEvent(e.eventName)).length;
+    page._stdMetaCount = page.meta.events.filter((e) => isStandardEvent(e.eventName)).length;
+    totalStdTT += page._stdTTCount;
+    totalStdMeta += page._stdMetaCount;
+  }
+  report.summary._stdTTTotal = totalStdTT;
+  report.summary._stdMetaTotal = totalStdMeta;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -44,6 +67,7 @@ ${getStyles()}
   </footer>
 </div>
 <script>
+${buildStandardFilterScript()}
 ${buildCsvExportScript(report)}
 </script>
 </body>
@@ -60,12 +84,12 @@ function renderSummary(summary) {
         <div class="stat-label">Pages Scanned</div>
       </div>
       <div class="stat-card tiktok">
-        <div class="stat-value">${summary.totalTikTokEvents}</div>
+        <div class="stat-value" data-all="${summary.totalTikTokEvents}" data-standard="${summary._stdTTTotal}">${summary.totalTikTokEvents}</div>
         <div class="stat-label">TikTok Events</div>
         <div class="stat-detail">${summary.tiktokPixelIds.length} pixel ID(s)</div>
       </div>
       <div class="stat-card meta">
-        <div class="stat-value">${summary.totalMetaEvents}</div>
+        <div class="stat-value" data-all="${summary.totalMetaEvents}" data-standard="${summary._stdMetaTotal}">${summary.totalMetaEvents}</div>
         <div class="stat-label">Meta Events</div>
         <div class="stat-detail">${summary.metaPixelIds.length} pixel ID(s)</div>
       </div>
@@ -84,6 +108,10 @@ function renderSummary(summary) {
     ${renderObservations(summary.overallObservations)}
 
     <div class="export-section">
+      <label class="std-filter-label">
+        <input type="checkbox" id="std-only-checkbox" checked onchange="toggleStandardOnly()">
+        Standard events only
+      </label>
       <button class="export-btn" onclick="exportCsv()">Export Mismatches CSV</button>
     </div>
   </section>`;
@@ -119,19 +147,19 @@ function renderPage(page, index) {
   <details class="page-section-collapsible">
     <summary class="page-section-header${isCritical ? " page-section-critical" : ""}">
       <h2>Page ${index + 1}: <a href="${esc(page.url)}" target="_blank">${esc(page.url)}</a> ${statusBadge}</h2>
-      <span class="page-toggle-hint">TikTok: ${page.tiktok.eventCount} events &middot; Meta: ${page.meta.eventCount} events</span>
+      <span class="page-toggle-hint" data-all-hint="TikTok: ${page.tiktok.eventCount} events &middot; Meta: ${page.meta.eventCount} events" data-standard-hint="TikTok: ${page._stdTTCount} events &middot; Meta: ${page._stdMetaCount} events">TikTok: ${page.tiktok.eventCount} events &middot; Meta: ${page.meta.eventCount} events</span>
     </summary>
     <div class="page-section-body">
       ${redirectNote}
 
       <div class="stats-grid">
         <div class="stat-card tiktok small">
-          <div class="stat-value">${page.tiktok.eventCount}</div>
+          <div class="stat-value" data-all="${page.tiktok.eventCount}" data-standard="${page._stdTTCount}">${page.tiktok.eventCount}</div>
           <div class="stat-label">TikTok Events</div>
           <div class="stat-detail">${page.tiktok.pixelIds.length} pixel ID(s)</div>
         </div>
         <div class="stat-card meta small">
-          <div class="stat-value">${page.meta.eventCount}</div>
+          <div class="stat-value" data-all="${page.meta.eventCount}" data-standard="${page._stdMetaCount}">${page.meta.eventCount}</div>
           <div class="stat-label">Meta Events</div>
           <div class="stat-detail">${page.meta.pixelIds.length} pixel ID(s)</div>
         </div>
@@ -209,7 +237,7 @@ function renderMetaOnlySection(metaOnlyEvents, meta) {
         ? e.customData
         : {};
       return `
-      <tr class="meta_only">
+      <tr class="meta_only" data-event-name="${esc(e.eventName)}">
         <td><strong>${esc(e.eventName)}</strong></td>
         <td>${esc(e.pixelId || "—")}</td>
         <td><span class="badge ${e.eventCategory}">${esc(e.eventCategory)}</span></td>
@@ -219,7 +247,7 @@ function renderMetaOnlySection(metaOnlyEvents, meta) {
     .join("\n");
 
   return `
-    <div class="pixel-comparison-section">
+    <div class="pixel-comparison-section meta-only-section">
       <h3>Meta-Only Events</h3>
       <p class="pixel-comparison-meta">Events firing on Meta but not matched by any TikTok pixel.</p>
       <div class="table-wrapper">
@@ -281,7 +309,7 @@ function renderEventComparisonTable(comparison, paramComparisons) {
 
       // Build the event row
       let html = `
-      <tr class="event-row ${statusClass}">
+      <tr class="event-row ${statusClass}" data-tt-event="${esc(m.tiktokEvent || "")}" data-meta-event="${esc(m.metaEvent || "")}">
         <td>${esc(m.tiktokEvent || "—")}</td>
         <td>${m.tiktokCount}</td>
         <td>${esc(m.metaEvent || "—")}</td>
@@ -533,7 +561,10 @@ function renderObservations(observations) {
         summary: "📋",
       }[obs.type] || "•";
 
-      return `<li class="obs-${obs.type}"><span class="obs-icon">${icon}</span> ${esc(obs.message)}</li>`;
+      const eventsAttr = obs.events && obs.events.length > 0
+        ? ` data-events="${esc(obs.events.join(","))}"`
+        : "";
+      return `<li class="obs-${obs.type}"${eventsAttr}><span class="obs-icon">${icon}</span> ${esc(obs.message)}</li>`;
     })
     .join("\n");
 
@@ -544,6 +575,85 @@ function renderObservations(observations) {
       <h3>${hasCritical ? "⚠ Observations" : "Observations"}</h3>
       <ul>${items}</ul>
     </div>`;
+}
+
+/**
+ * Build the client-side JS that powers the "Standard events only" checkbox.
+ * Toggles visibility of non-standard event rows, updates stats, and hides
+ * empty sections/observations.
+ */
+function buildStandardFilterScript() {
+  const stdEventsJson = JSON.stringify([...STANDARD_EVENTS]);
+  return `
+    var _stdEvents = new Set(${stdEventsJson});
+    function isStdEvent(name) {
+      return !name || _stdEvents.has(String(name).toLowerCase());
+    }
+    function toggleStandardOnly() {
+      var checked = document.getElementById('std-only-checkbox').checked;
+
+      // Toggle event rows in comparison tables
+      document.querySelectorAll('tr.event-row').forEach(function(row) {
+        var tt = row.getAttribute('data-tt-event');
+        var meta = row.getAttribute('data-meta-event');
+        var isStd = (tt && isStdEvent(tt)) || (meta && isStdEvent(meta)) || (!tt && !meta);
+        row.style.display = (checked && !isStd) ? 'none' : '';
+        // Also hide the following param-subrow sibling if it exists
+        var next = row.nextElementSibling;
+        if (next && next.classList.contains('param-subrow')) {
+          next.style.display = (checked && !isStd) ? 'none' : '';
+        }
+      });
+
+      // Toggle meta-only event rows
+      document.querySelectorAll('tr[data-event-name]').forEach(function(row) {
+        var evtName = row.getAttribute('data-event-name');
+        row.style.display = (checked && !isStdEvent(evtName)) ? 'none' : '';
+      });
+
+      // Hide empty meta-only sections
+      document.querySelectorAll('.meta-only-section').forEach(function(section) {
+        var rows = section.querySelectorAll('tr[data-event-name]');
+        if (rows.length === 0) return;
+        var hasVisible = Array.from(rows).some(function(row) { return row.style.display !== 'none'; });
+        section.style.display = (checked && !hasVisible) ? 'none' : '';
+      });
+
+      // Hide empty comparison subsections (no visible event rows)
+      document.querySelectorAll('.meta-comparison-subsection').forEach(function(section) {
+        var allRows = section.querySelectorAll('tr.event-row');
+        if (allRows.length === 0) return;
+        var hasVisible = Array.from(allRows).some(function(row) { return row.style.display !== 'none'; });
+        section.style.display = (checked && !hasVisible) ? 'none' : '';
+      });
+
+      // Toggle observation items that reference specific events
+      document.querySelectorAll('li[data-events]').forEach(function(li) {
+        var events = li.getAttribute('data-events').split(',');
+        var hasStd = events.some(function(e) { return isStdEvent(e); });
+        li.style.display = (checked && !hasStd) ? 'none' : '';
+      });
+
+      // Hide observation blocks where no items are visible
+      document.querySelectorAll('.observations').forEach(function(block) {
+        var items = block.querySelectorAll('li');
+        var visibleItems = Array.from(items).filter(function(li) { return li.style.display !== 'none'; });
+        block.style.display = visibleItems.length === 0 ? 'none' : '';
+      });
+
+      // Update stat values
+      document.querySelectorAll('[data-all][data-standard]').forEach(function(el) {
+        el.textContent = checked ? el.getAttribute('data-standard') : el.getAttribute('data-all');
+      });
+
+      // Update page toggle hints
+      document.querySelectorAll('[data-all-hint][data-standard-hint]').forEach(function(el) {
+        el.innerHTML = checked ? el.getAttribute('data-standard-hint') : el.getAttribute('data-all-hint');
+      });
+    }
+    // Apply on load (checkbox is checked by default)
+    document.addEventListener('DOMContentLoaded', toggleStandardOnly);
+  `;
 }
 
 /**
@@ -572,7 +682,7 @@ function buildCsvExportScript(report) {
         for (const m of mc.eventComparison.metaOnly) {
           const eventName = m.metaEvent || m.tiktokEvent;
           const params = metaOnlyParams[eventName] || [];
-          rows.push({ ttPixel, url, missingEvent: eventName, matchedEvent: "", params: params.join("; ") });
+          rows.push({ ttPixel, url, missingEvent: eventName, matchedEvent: "", params: params.join("; "), event: eventName });
         }
 
         // For matched/count_mismatch events: only export params missing from TikTok
@@ -580,7 +690,7 @@ function buildCsvExportScript(report) {
           if (metaOnlyParams[pcomp.eventName]) continue;
           const missingFromTikTok = pcomp.metaOnly.map((p) => p.key);
           if (missingFromTikTok.length > 0) {
-            rows.push({ ttPixel, url, missingEvent: "", matchedEvent: pcomp.eventName, params: missingFromTikTok.join("; ") });
+            rows.push({ ttPixel, url, missingEvent: "", matchedEvent: pcomp.eventName, params: missingFromTikTok.join("; "), event: pcomp.eventName });
           }
         }
       }
@@ -591,7 +701,7 @@ function buildCsvExportScript(report) {
     if (page.metaOnlyEvents && page.pixelComparisons.length === 0) {
       for (const e of page.metaOnlyEvents) {
         const params = e.customData ? Object.keys(e.customData) : [];
-        rows.push({ ttPixel: "", url, missingEvent: e.eventName, matchedEvent: "", params: params.join("; ") });
+        rows.push({ ttPixel: "", url, missingEvent: e.eventName, matchedEvent: "", params: params.join("; "), event: e.eventName });
       }
     }
   }
@@ -610,9 +720,11 @@ function buildCsvExportScript(report) {
   return `
     var _csvRows = ${csvData};
     function exportCsv() {
+      var stdOnly = document.getElementById('std-only-checkbox').checked;
+      var filtered = stdOnly ? _csvRows.filter(function(r) { return isStdEvent(r.event); }) : _csvRows;
       var lines = ["TikTokPixel,URL,MissingEvent,MatchedEvent,MissingParameters"];
-      for (var i = 0; i < _csvRows.length; i++) {
-        var r = _csvRows[i];
+      for (var i = 0; i < filtered.length; i++) {
+        var r = filtered[i];
         lines.push(csvField(r.ttPixel) + "," + csvField(r.url) + "," + csvField(r.missingEvent) + "," + csvField(r.matchedEvent) + "," + csvField(r.params));
       }
       var blob = new Blob([lines.join("\\n")], { type: "text/csv" });
@@ -938,11 +1050,31 @@ function getStyles() {
       border: 1px solid #fca5a5;
     }
 
-    /* Export button */
+    /* Standard events filter */
     .export-section {
       margin-top: 1.25rem;
       text-align: right;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 1rem;
     }
+    .std-filter-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.9rem;
+      color: #555;
+      cursor: pointer;
+      user-select: none;
+    }
+    .std-filter-label input[type="checkbox"] {
+      width: 1rem;
+      height: 1rem;
+      cursor: pointer;
+    }
+
+    /* Export button */
     .export-btn {
       background: #1d4ed8;
       color: white;

@@ -507,18 +507,20 @@ function generatePageObservations(url, tiktok, meta, pixelComparisons) {
       const label = `TT:${tiktokPixelId} vs Meta:${metaPixelId}`;
 
       if (eventComparison.tiktokOnly.length > 0) {
-        const events = eventComparison.tiktokOnly.map((e) => e.tiktokEvent).join(", ");
+        const eventNames = eventComparison.tiktokOnly.map((e) => e.tiktokEvent);
         observations.push({
           type: "gap",
-          message: `[${label}] Events firing on TikTok but NOT on Meta: ${events}`,
+          message: `[${label}] Events firing on TikTok but NOT on Meta: ${eventNames.join(", ")}`,
+          events: eventNames,
         });
       }
 
       if (eventComparison.metaOnly.length > 0) {
-        const events = eventComparison.metaOnly.map((e) => e.metaEvent).join(", ");
+        const eventNames = eventComparison.metaOnly.map((e) => e.metaEvent);
         observations.push({
           type: "gap",
-          message: `[${label}] Events firing on Meta but NOT on TikTok: ${events}`,
+          message: `[${label}] Events firing on Meta but NOT on TikTok: ${eventNames.join(", ")}`,
+          events: eventNames,
         });
       }
 
@@ -526,6 +528,7 @@ function generatePageObservations(url, tiktok, meta, pixelComparisons) {
         observations.push({
           type: "mismatch",
           message: `[${label}] "${mismatch.tiktokEvent}" fires ${mismatch.tiktokCount}x on TikTok but ${mismatch.metaCount}x on Meta.`,
+          events: [mismatch.tiktokEvent],
         });
       }
 
@@ -537,6 +540,7 @@ function generatePageObservations(url, tiktok, meta, pixelComparisons) {
           observations.push({
             type: "param_diff",
             message: `[${label}] Parameter differences in "${paramDiff.eventName}": ${diffs}`,
+            events: [paramDiff.eventName],
           });
         }
       }
@@ -588,6 +592,7 @@ function generateOverallObservations(pages) {
     observations.push({
       type: "summary",
       message: `Across all pages, ${uniqueGaps.size} event type(s) are not firing consistently on both platforms.`,
+      events: [...uniqueGaps],
     });
   }
 
