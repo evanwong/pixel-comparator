@@ -586,12 +586,14 @@ function buildCsvExportScript(report) {
       }
     }
 
-    // Meta-only events not matched by any TikTok pixel — include params on same row
+    // Meta-only events not matched by any TikTok pixel — one row per pixel
     if (page.metaOnlyEvents) {
       for (const e of page.metaOnlyEvents) {
         const params = e.customData ? Object.keys(e.customData) : [];
-        const ttPixel = page.tiktok.pixelIds.length > 0 ? page.tiktok.pixelIds.join("; ") : "";
-        rows.push({ ttPixel, url, missingEvent: e.eventName, matchedEvent: "", params: params.join("; ") });
+        const pixelIds = page.tiktok.pixelIds.length > 0 ? page.tiktok.pixelIds : [""];
+        for (const ttPixel of pixelIds) {
+          rows.push({ ttPixel, url, missingEvent: e.eventName, matchedEvent: "", params: params.join("; ") });
+        }
       }
     }
   }
