@@ -561,14 +561,14 @@ function buildCsvExportScript(report) {
         // Meta-only events (TikTok is missing the event entirely)
         for (const m of mc.eventComparison.metaOnly) {
           const eventName = m.metaEvent || m.tiktokEvent;
-          rows.push({ url, event: eventName, params: "" });
+          rows.push({ url, missingEvent: eventName, matchedEvent: "", params: "" });
         }
 
         // For matched/count_mismatch events: only export params missing from TikTok
         for (const pcomp of mc.paramComparison) {
           const missingFromTikTok = pcomp.metaOnly.map((p) => p.key);
           if (missingFromTikTok.length > 0) {
-            rows.push({ url, event: pcomp.eventName, params: missingFromTikTok.join("; ") });
+            rows.push({ url, missingEvent: "", matchedEvent: pcomp.eventName, params: missingFromTikTok.join("; ") });
           }
         }
       }
@@ -577,7 +577,7 @@ function buildCsvExportScript(report) {
     // Meta-only events not matched by any TikTok pixel
     if (page.metaOnlyEvents) {
       for (const e of page.metaOnlyEvents) {
-        rows.push({ url, event: e.eventName, params: "" });
+        rows.push({ url, missingEvent: e.eventName, matchedEvent: "", params: "" });
       }
     }
   }
@@ -588,10 +588,10 @@ function buildCsvExportScript(report) {
   return `
     var _csvRows = ${csvData};
     function exportCsv() {
-      var lines = ["URL,MissingEvent,MissingParameters"];
+      var lines = ["URL,MissingEvent,MatchedEvent,MissingParameters"];
       for (var i = 0; i < _csvRows.length; i++) {
         var r = _csvRows[i];
-        lines.push(csvField(r.url) + "," + csvField(r.event) + "," + csvField(r.params));
+        lines.push(csvField(r.url) + "," + csvField(r.missingEvent) + "," + csvField(r.matchedEvent) + "," + csvField(r.params));
       }
       var blob = new Blob([lines.join("\\n")], { type: "text/csv" });
       var a = document.createElement("a");
