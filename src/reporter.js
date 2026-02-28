@@ -558,14 +558,25 @@ function buildCsvExportScript(report) {
 
     for (const pc of page.pixelComparisons) {
       for (const mc of pc.metaComparisons) {
-        // Meta-only events (TikTok is missing the event entirely)
+        // Build a map of params for meta-only events from paramComparison
+        const metaOnlyParams = {};
+        for (const pcomp of mc.paramComparison) {
+          if (pcomp.metaOnly.length > 0 && pcomp.matches.length === 0 && pcomp.tiktokOnly.length === 0) {
+            // Entirely meta-only event — all params belong to missing event row
+            metaOnlyParams[pcomp.eventName] = pcomp.metaOnly.map((p) => p.key);
+          }
+        }
+
+        // Meta-only events (TikTok is missing the event entirely) — include params on same row
         for (const m of mc.eventComparison.metaOnly) {
           const eventName = m.metaEvent || m.tiktokEvent;
-          rows.push({ url, missingEvent: eventName, matchedEvent: "", params: "" });
+          const params = metaOnlyParams[eventName] || [];
+          rows.push({ url, missingEvent: eventName, matchedEvent: "", params: params.join("; ") });
         }
 
         // For matched/count_mismatch events: only export params missing from TikTok
         for (const pcomp of mc.paramComparison) {
+          if (metaOnlyParams[pcomp.eventName]) continue; // already handled above
           const missingFromTikTok = pcomp.metaOnly.map((p) => p.key);
           if (missingFromTikTok.length > 0) {
             rows.push({ url, missingEvent: "", matchedEvent: pcomp.eventName, params: missingFromTikTok.join("; ") });
@@ -574,10 +585,11 @@ function buildCsvExportScript(report) {
       }
     }
 
-    // Meta-only events not matched by any TikTok pixel
+    // Meta-only events not matched by any TikTok pixel — include params on same row
     if (page.metaOnlyEvents) {
       for (const e of page.metaOnlyEvents) {
-        rows.push({ url, missingEvent: e.eventName, matchedEvent: "", params: "" });
+        const params = e.customData ? Object.keys(e.customData) : [];
+        rows.push({ url, missingEvent: e.eventName, matchedEvent: "", params: params.join("; ") });
       }
     }
   }
