@@ -548,7 +548,7 @@ function renderObservations(observations) {
 
 /**
  * Build the client-side JS that powers the CSV export button.
- * Extracts mismatch rows: meta_only events and parameter gaps/diffs.
+ * Only exports: meta-only events, and parameters missing from TikTok on matched events.
  */
 function buildCsvExportScript(report) {
   const rows = [];
@@ -564,17 +564,11 @@ function buildCsvExportScript(report) {
           rows.push({ url, event: eventName, params: "" });
         }
 
-        // Parameter mismatches on matched/count_mismatch events
+        // For matched/count_mismatch events: only export params missing from TikTok
         for (const pcomp of mc.paramComparison) {
-          const missingParams = [];
-          for (const d of pcomp.differences) {
-            missingParams.push(d.key);
-          }
-          for (const p of pcomp.metaOnly) {
-            missingParams.push(p.key);
-          }
-          if (missingParams.length > 0) {
-            rows.push({ url, event: "None", params: missingParams.join("; ") });
+          const missingFromTikTok = pcomp.metaOnly.map((p) => p.key);
+          if (missingFromTikTok.length > 0) {
+            rows.push({ url, event: pcomp.eventName, params: missingFromTikTok.join("; ") });
           }
         }
       }
